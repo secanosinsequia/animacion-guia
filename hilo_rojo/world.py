@@ -322,6 +322,22 @@ class World:
         iy = (Ri[1, 0] * qx + Ri[1, 1] * qy) / hg.s
         u_ = np.clip(ix / hg.iw, 0, 1)
         v_ = np.clip(iy / hg.ih, 0, 1)
+        # la tela colgada no es un plano: lomas suaves (luz rasante) y bordes que ondulan un poco
+        rh = np.random.default_rng(100 + hg.seed)
+        cloth = np.ones_like(u_)
+        for _ in range(4):
+            fu, fv = rh.uniform(0.6, 2.4), rh.uniform(0.4, 1.8)
+            amp = hg.ih * 0.0045 * rh.uniform(0.6, 1.0)
+            cs = np.cos(2 * np.pi * (fu * u_ + fv * v_) + rh.uniform(0, 2 * np.pi))
+            cloth += 1.2 * (0.64 * amp * cs * 2 * np.pi * fu / hg.iw + 0.56 * amp * cs * 2 * np.pi * fv / hg.ih)
+        for axis in (0, 1):
+            b = hg.ih * 0.0026
+            fu, fv = rh.uniform(0.8, 2.2), rh.uniform(0.6, 1.6)
+            dd = b * np.sin(2 * np.pi * (fu * u_ + fv * v_) + rh.uniform(0, 2 * np.pi))
+            if axis == 0:
+                ix = ix + dd
+            else:
+                iy = iy + dd
         # comba entre perritos: el borde de arriba cuelga en el medio
         sag = hg.ih * hg.sag * (1 - ((u_ - 0.5) / 0.43) ** 2).clip(0, 1) * (1 - v_) ** 2
         iy = iy - sag
@@ -329,7 +345,7 @@ class World:
         f = 1.0
         if k < 0.8:
             f = k * 1.15
-        folds = 1 + 0.045 * np.sin(u_ * np.pi * hg.folds + 0.6 + hg.seed) * (1 - v_) ** 1.5 * np.sin(u_ * np.pi)
+        folds = (1 + 0.045 * np.sin(u_ * np.pi * hg.folds + 0.6 + hg.seed) * (1 - v_) ** 1.5 * np.sin(u_ * np.pi)) * cloth
         return dict(box=(bx0, by0, bx1, by1), mx=(ix * f - 0.5 + 0.5 * f).astype(np.float32) if f != 1 else (ix - 0.5).astype(np.float32),
                     my=(iy * f - 0.5 + 0.5 * f).astype(np.float32) if f != 1 else (iy - 0.5).astype(np.float32),
                     f=f, folds=folds.astype(np.float32))

@@ -223,6 +223,9 @@
   const hero = document.getElementById("hero");
   const canvas = document.getElementById("arpillera");
   const ctx = canvas.getContext("2d");
+  const probeCanvas = document.createElement("canvas");
+  probeCanvas.width = probeCanvas.height = 1;
+  const probe = probeCanvas.getContext("2d", { willReadFrequently: true });
   const stops = [...document.querySelectorAll(".stop")];
   const lana = document.querySelector(".thread__lana");
   const thread = document.querySelector(".thread");
@@ -268,10 +271,26 @@
     if (k === current && !force) return;
     current = k;
     const cw = canvas.width, ch = canvas.height, iw = img.naturalWidth, ih = img.naturalHeight;
-    // "cover": llena la pantalla (la arpillera queda centrada; se recorta pared)
-    const s = Math.max(cw / iw, ch / ih);
-    const w = iw * s, h = ih * s;
-    ctx.drawImage(img, (cw - w) / 2, (ch - h) * 0.3, w, h);
+    const mismatch = Math.max((iw / ih) / (cw / ch), (cw / ch) / (iw / ih));
+    if (mismatch < 1.2) {
+      // proporciones parecidas: "cover" (llena la pantalla; se recorta un poco de pared)
+      const s = Math.max(cw / iw, ch / ih);
+      const w = iw * s, h = ih * s;
+      ctx.drawImage(img, (cw - w) / 2, (ch - h) * 0.3, w, h);
+    } else {
+      // muy distintas (p. ej. tableta vertical): la imagen entera sobre el color de su propia pared
+      let fill = "#e2d7c3";
+      try {            // (abierta como archivo local, el lienzo no deja leer píxeles: se usa la cal)
+        probe.drawImage(img, 0, 0, iw * 0.03, ih, 0, 0, 1, 1);
+        const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+        fill = `rgb(${r},${g},${b})`;
+      } catch (e) {}
+      ctx.fillStyle = fill;
+      ctx.fillRect(0, 0, cw, ch);
+      const s = Math.min(cw / iw, ch / ih);
+      const w = iw * s, h = ih * s;
+      ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
+    }
   }
 
   function scrollUnits() {
