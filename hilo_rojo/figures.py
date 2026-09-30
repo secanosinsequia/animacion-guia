@@ -322,11 +322,15 @@ def sun(cx, cy, r, rng, t, u=1.0):
     disc = Piece(ellipse_poly(cx, cy, r, r, n=48), "#f1b82d", rng, kind="felt", t_place=t,
                  stitch=("#c8761b", 6 * u, 5 * u, 1.8 * u), fabric_scale=u)
     rays = []
+    rs = np.random.default_rng(int(abs(cx * 7 + cy * 3)) % (2 ** 31))    # (su propio azar: la tela no cambia)
     for k in range(14):
-        a = k * 2 * np.pi / 14 + rng.normal(0, 0.04)
-        p0 = (cx + np.cos(a) * r * 1.18, cy + np.sin(a) * r * 1.18)
-        p1 = (cx + np.cos(a) * r * (1.55 + 0.12 * (k % 2)), cy + np.sin(a) * r * (1.55 + 0.12 * (k % 2)))
-        rays.append(Stitch.render(p0, p1, 2.8 * u, "#e07b1a", rng))
+        a = k * 2 * np.pi / 14 + rng.normal(0, 0.04) + rs.normal(0, 0.07)
+        r0_ = r * rs.uniform(1.12, 1.24)                 # cosidos a ojo: cada rayo de su largo y su giro
+        r1_ = r * (1.55 + 0.12 * (k % 2)) * rs.uniform(0.86, 1.14)
+        tw = rs.normal(0, 0.06)
+        p0 = (cx + np.cos(a) * r0_, cy + np.sin(a) * r0_)
+        p1 = (cx + np.cos(a + tw) * r1_, cy + np.sin(a + tw) * r1_)
+        rays.append(Stitch.render(p0, p1, 2.8 * u * rs.uniform(0.85, 1.15), "#e07b1a", rng))
     return disc, rays
 
 

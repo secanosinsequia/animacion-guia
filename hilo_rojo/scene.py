@@ -1173,7 +1173,7 @@ class Scene:
                 c, R = lamp["hand"], lamp["R"]
                 base_ = lamp.get("base", 0.55)
                 if lamp.get("line", True) is not None and R < 0.2 * max(self.W, self.H):
-                    base_ = base_ * (1 - 0.5 * self._hand_shadow(c, R, k))   # la mano y la linterna, por detrás
+                    base_ = base_ * (1 - 0.6 * self._hand_shadow(c, R, k))   # la mano y la linterna, por detrás
                 field = (base_ + lamp.get("amp", 0.6)
                          * np.exp(-((self.xx - c[0]) ** 2 + (self.yy - c[1]) ** 2) / (2 * R * R)))[..., None]
                 gain = 16.0
