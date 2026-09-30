@@ -39,7 +39,7 @@ def composite_T_piece(T, T0, C, sp, crisp=0.3, hem=True):
     a = sp.a[sl][..., None]
     reg = T[cy0:cy1, cx0:cx1]
     c = C[cy0:cy1, cx0:cx1]
-    seam = (1 - 0.5 * c)[..., None]
+    seam = (1 - 0.62 * c)[..., None]
     # la tela difunde la luz: los huecos del yute se ven blandos a través de ella (no como un mosquitero)
     T0r = T0[cy0:cy1, cx0:cx1]
     T0b = getattr(composite_T_piece, "blur", None)
@@ -49,7 +49,7 @@ def composite_T_piece(T, T0, C, sp, crisp=0.3, hem=True):
         a2 = sp.a[sl]
         k = max(3, int(round(min(a2.shape) * 0.0 + 8)))
         inner = cv2.erode(a2, np.ones((k, k), np.uint8))
-        seam = seam * (1 - 0.45 * np.clip(a2 - inner, 0, 1))[..., None]
+        seam = seam * (1 - 0.56 * np.clip(a2 - inner, 0, 1))[..., None]
     reg[:] = reg * (1 - a) + a * sp.tr[sl] * under * seam
     c[:] = np.maximum(c, sp.a[sl])
 
@@ -192,6 +192,11 @@ class Yarn:
         self.color = lin(color) if isinstance(color, str) else np.asarray(color, np.float32)
         self.w = w
         pts = resample(np.asarray(path, np.float64), step or max(1.0, w * 0.5))
+        # lana hilada a mano: engrosa y adelgaza sin regla (tres ondas de largo y fuerza al azar; con su propio
+        # azar, para no cambiar el del resto de la tela)
+        rs = np.random.default_rng(int(abs(pts[0][0] * 131 + pts[0][1] * 17 + len(pts) * 7)) % (2 ** 31))
+        self._slub = [(rs.uniform(0.03, 0.08) if kind == "wool" else 0.0, rs.uniform(4.0, 16.0) * w,
+                       rs.uniform(0, 2 * np.pi)) for _ in range(3)]
         seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
         self.arc = np.concatenate([[0], np.cumsum(seg)])
         self.pts = pts
@@ -251,7 +256,8 @@ class Yarn:
             best_e = np.where(better, qx * nrm[0] + qy * nrm[1], best_e)
             best_nx = np.where(better, nrm[0], best_nx)
             best_ny = np.where(better, nrm[1], best_ny)
-        r = w / 2 * (1 + 0.06 * np.sin(best_s / (w * 3.1)))          # la lana engrosa y adelgaza
+        slub = sum(a_ * np.sin(best_s / p_ * 2 * np.pi + f_) for a_, p_, f_ in self._slub)
+        r = w / 2 * (1 + 0.06 * np.sin(best_s / (w * 3.1)) + slub)    # la lana engrosa y adelgaza
         a = np.clip(r - best_d + 0.6, 0, 1).astype(np.float32)
         fib = 1 + 0.10 * (rng.random(a.shape).astype(np.float32) - 0.5)
         n_vec = (best_nx, best_ny)

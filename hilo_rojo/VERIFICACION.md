@@ -13,7 +13,8 @@ siguiente los resolvió.
 | 3 | v3 (16,9 s) | | **8,5/10, aprobado** (4 bloqueantes) | 7,5/10 | 7/10 |
 | 4 | v3.1 (16,95 s) | | (interrumpida por un reinicio) | 8/10 («estuve cerca») | 7,5/10 |
 | 5 | v3.2 (16,95 s) | | **8,5/10, aprobado** («sí, me sorprendió»; 2 bloqueantes) | **8,5/10, aprobado** («sí, me sorprendió») | 8/10 («la primera vez que estuvo cerca») |
-| 6 | v3.3 (16,85 s) | | *(pendiente)* | *(pendiente)* | *(pendiente)* |
+| 6 | v3.3 (16,85 s) | | **9/10, aprobado** («sí, me sorprendió»; sin bloqueantes) | **9/10, aprobado** («sí, me sorprendió»; 1 obligatorio) | 16:9: **8,5/10, aprobado** («sí, me sorprendió»); 9:16: 7,5/10 |
+| 7 | v3.4 (16,93 s) | | *(pendiente)* | *(pendiente)* | *(pendiente)* |
 
 ## Qué pidieron y qué se hizo
 
@@ -71,3 +72,22 @@ B y C aprobaron («sí, me sorprendió»). Lo que pidieron para publicar, y lo q
 | Portada: la aguja como una mancha (C) y pegada al borde en 9:16 (B, C, D) | Semienfocada desde el primer cuadro; en 9:16 cuelga a la derecha del centro, lejos del sol. |
 | Salto de la aguja en una sola imagen (B) | La bajada se reparte en tres imágenes (escala y giro graduales). |
 | La torre que se descose quedaba fuera de foco (B) | El foco queda entre las manos de la vigía y la torre. |
+
+### Ronda 6 → v3.4: el teléfono y la terminación
+B y C aprobaron con 9/10; D aprobó 16:9 y pidió que el teléfono tuviera el mismo golpe.
+| Pedido | Qué se hizo |
+|---|---|
+| En 9:16 la línea escondida terminaba en un potrero junto al APR (D, obligatorio; B) | La última torre queda frente a la puerta de la casa roja, como en 16:9. |
+| El revés vacío duraba 0,4 s y se leía poco; la lana se veía marrón (D, obligatorio en 9:16; B, C) | Dura 10 imágenes (0,83 s); la tela brilla menos que los pinchazos, que son más grandes; la lana deja pasar luz roja y la maraña se ve como silueta. |
+| La «a» de la bajada se leía «o» («Guío poro»; C, obligatorio; D) | La bajada usa una «a» de dos pisos, de imprenta escolar. |
+| Las torres escondidas asomaban mientras la lámpara estaba en las señales (B, D) | En las señales solo se ve su hebra, y cada señal tiene dos imágenes; las torres aparecen recién desde la torre del cerro. |
+| En 9:16 la lana hacía un gran lazo, como un garabato (D) | En 9:16 la lana parte anudada en la torre del cerro, baja por la ruta como la lámpara y después pasa de mano en mano (la vigía también la toma): no se cruza ni hace lazos. |
+| La vuelta al día parecía un fundido (C) | Clic de verdad: una imagen casi negra y el tubo que prende, se corta y vuelve a prender. |
+| El contraluz parecía una capa de color con una rejilla pareja (C, D) | El algodón brilla tibio y con el tinte apagado; la trama del saco solo se ve bajo el cielo (tela delgada); costuras y dobladillos más oscuros; la lámpara deja ver la sombra de la mano que la sostiene; las torres escondidas son hilo torcido con pelusa y los cables tienen caída desigual. |
+| La maraña se veía como una oruga o una mancha (B, D) | Menos lazadas, más abiertas y de distinto tamaño: se ve la tela entre ellas. |
+| Anillos parejos en el frunce de la ruta, como curvas de nivel (B) | Cada abanico de pliegues tiene su número de pliegues y se tuerce al azar. |
+| Techos y ovejas repetidos (D) | Cada techo es otro (zinc oxidado, media agua, zinc con un parche, zinc pintado); una oveja pastando, una echada y una café mirando. |
+| Letras aún tipográficas y un espacio más corto entre «Sistema» y «de» (D, B) | Cada letra del título con su grosor; el aire entre palabras se mide en el bordado. |
+| Una línea finísima bajo la aguja del póster (C) | Era la silueta de la aguja que seguía más allá de la punta: corregida. |
+| En 9:16 el hilo de la aguja del póster cruzaba la casa amarilla y partía el cuadro (B, D) | La aguja cuelga más arriba, sobre los cerros: su hilo solo cruza el cielo. |
+| La lana roja de grosor parejo y curvas suaves (D) | La lana engrosa y adelgaza sin regla, y se quiebra un poco donde la fijan. |

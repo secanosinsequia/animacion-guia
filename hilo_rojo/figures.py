@@ -58,13 +58,46 @@ _ACC = {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "Á": "A", "É": 
         "ñ": "n", "Ñ": "N"}
 
 
-def hershey_strokes_es(text, font, height, x, y, anchor="left", ref="H"):
+def _two_story_a(xl, xr, base, xh):
+    """Una «a» de dos pisos (la de imprenta escolar), en la caja de la «a» redonda: arco arriba, palo a la
+    derecha y panza abajo. A tamaño chico no se confunde con una «o»."""
+    w = xr - xl
+    hook = catmull_rom(np.array([(xl + 0.1 * w, base - 0.82 * xh), (xl + 0.32 * w, base - 0.99 * xh),
+                                 (xl + 0.66 * w, base - 1.0 * xh), (xr - 0.04 * w, base - 0.84 * xh),
+                                 (xr, base - 0.6 * xh), (xr, base - 0.3 * xh), (xr, base)]), 8)
+    bowl = catmull_rom(np.array([(xr, base - 0.47 * xh), (xl + 0.42 * w, base - 0.52 * xh),
+                                 (xl + 0.04 * w, base - 0.38 * xh), (xl + 0.02 * w, base - 0.14 * xh),
+                                 (xl + 0.34 * w, base + 0.01 * xh), (xr - 0.16 * w, base - 0.07 * xh),
+                                 (xr, base - 0.22 * xh)]), 8)
+    return [hook, bowl]
+
+
+def hershey_strokes_es(text, font, height, x, y, anchor="left", ref="H", two_story_a=False):
     """Como hershey_strokes, pero con tildes y eñes (las Hershey solo traen ASCII): se escribe la letra
-    base y se le borda el acento encima."""
+    base y se le borda el acento encima. two_story_a: la «a» de dos pisos en vez de la redonda."""
     base = "".join(_ACC.get(c, c) for c in text)
     strokes, w = hershey_strokes(base, font, height, 0.0, y, anchor="left", ref=ref)
     ox = x - (w / 2 if anchor == "center" else (w if anchor == "right" else 0))
     out = [s_ + np.array([ox, 0.0]) for s_ in strokes]
+    if two_story_a:
+        for i, c in enumerate(base):
+            if c != "a":
+                continue
+            pre = base[:i].rstrip()
+            x_pre = -1e9
+            if pre:
+                ps, _ = hershey_strokes(pre, font, height, 0.0, y, anchor="left", ref=ref)
+                x_pre = max(float(np.max(p_[:, 0])) for p_ in ps)
+            cs, _ = hershey_strokes(base[:i + 1], font, height, 0.0, y, anchor="left", ref=ref)
+            mine = [p_ for p_ in cs if float(np.min(p_[:, 0])) > x_pre + 0.5] or cs[-1:]
+            for dt in mine:
+                for j, o in enumerate(out):
+                    if o.shape == dt.shape and np.allclose(o - np.array([ox, 0.0]), dt):
+                        out.pop(j)
+                        break
+            pts = np.vstack(mine)
+            out += [s_ + np.array([ox, 0.0]) for s_ in
+                    _two_story_a(float(pts[:, 0].min()), float(pts[:, 0].max()), y, y - float(pts[:, 1].min()))]
     for i, c in enumerate(text):
         if c not in _ACC:
             continue
@@ -109,7 +142,7 @@ def _needle_shape(xx, yy, back, tip, width):
     r = width / 2 * np.clip(np.where(s < 0.70, 1.0, (1 - s) / 0.30), 0, 1) ** 0.75
     r = np.where((s < -0.01) | (s > 1), 0, r)
     r = np.where(s < 0.035, width / 2 * np.clip(s / 0.035, 0, 1) ** 0.5, r)     # cabeza redondeada
-    a = np.clip(r - np.abs(e) + 0.5, 0, 1)
+    a = np.clip(r - np.abs(e) + 0.5, 0, 1) * ((s >= -0.01) & (s <= 1))           # (nada más allá de la punta)
     return a, s, e, r, L
 
 
@@ -159,9 +192,10 @@ def _rot(poly, c, ang):
 
 
 def house(cx, base, w, h, rng, t, wall="#c0392b", roof="#6e6a66", wall_kind="plain", roof_kind="cord",
-          windows=1, door_side=0.0, u=1.0, vary=True):
+          windows=1, door_side=0.0, u=1.0, vary=True, roof_style="gable", patch=None):
     """Casa de retazos. Con vary, cada casa sale distinta: proporciones, techo, puerta, ventanas y un
-    leve giro (cosida a mano, no calcada)."""
+    leve giro (cosida a mano, no calcada). roof_style: «gable» (dos aguas) o «shed» (media agua, más alta
+    de un lado); patch: color de un parche cosido sobre el techo."""
     parts = []
     if vary:
         w *= rng.uniform(0.88, 1.12)
@@ -179,10 +213,34 @@ def house(cx, base, w, h, rng, t, wall="#c0392b", roof="#6e6a66", wall_kind="pla
     ov = w * (rng.uniform(0.06, 0.16) if vary else 0.12)
     rise = h * (rng.uniform(0.45, 0.80) if vary else 0.62)
     ridge = w * (rng.uniform(0.0, 0.14) if vary else 0.08)
-    roof_poly = [np.array(p_) + jit() for p_ in [(x0 - ov, top + 4 * u), (cx - ridge, top - rise),
-                                                 (cx + ridge, top - rise), (x1 + ov, top + 4 * u)]]
+    if roof_style == "shed":                        # media agua: una sola caída, alta del lado de la puerta
+        hr_ = rise * 0.62
+        if door_side > 0:
+            pts_ = [(x0 - ov, top + 4 * u), (x0 - ov, top - 4 * u), (x1 + ov, top - hr_), (x1 + ov, top - hr_ + 12 * u)]
+        else:
+            pts_ = [(x0 - ov, top - hr_ + 12 * u), (x0 - ov, top - hr_), (x1 + ov, top - 4 * u), (x1 + ov, top + 4 * u)]
+        roof_poly = [np.array(p_) + jit() for p_ in pts_]
+        if door_side > 0:                           # la pared sube hasta el techo del lado alto
+            wall_up = [(x1, top), (x1, top - hr_ + 12 * u), (x0, top - 2 * u)]
+        else:
+            wall_up = [(x0, top), (x0, top - hr_ + 12 * u), (x1, top - 2 * u)]
+        parts.append(Piece(_rot([np.array(p_) + jit() * 0.5 for p_ in wall_up], c0, ang), wall, rng, kind=wall_kind,
+                           t_place=t, stitch=None, fabric_scale=u, margin=6, rough=0.5))
+    else:
+        roof_poly = [np.array(p_) + jit() for p_ in [(x0 - ov, top + 4 * u), (cx - ridge, top - rise),
+                                                     (cx + ridge, top - rise), (x1 + ov, top + 4 * u)]]
     parts.append(Piece(_rot(roof_poly, c0, ang), roof, rng, kind=roof_kind, t_place=t,
-                       stitch=("#2b2622", 7 * u, 5 * u, 1.6 * u), fabric_scale=u, angle=np.pi / 2 + ang))
+                       stitch=("#2b2622", 7 * u, 5 * u, 1.6 * u), fabric_scale=u,
+                       angle=(np.pi / 2 if roof_kind == "cord" else rng.uniform(-0.3, 0.3)) + ang))
+    if patch is not None and roof_style != "shed":   # un parche cosido encima (se le voló una plancha)
+        px_ = cx + rng.uniform(-0.25, 0.1) * w
+        py_ = top - rise * 0.38
+        pw_, ph_ = w * rng.uniform(0.16, 0.22), rise * rng.uniform(0.26, 0.34)
+        pp_ = [np.array(p_) + rng.normal(0, 0.06 * pw_, 2) for p_ in
+               [(px_ - pw_ / 2, py_ - ph_ / 2), (px_ + pw_ / 2, py_ - ph_ / 2), (px_ + pw_ / 2, py_ + ph_ / 2),
+                (px_ - pw_ / 2, py_ + ph_ / 2)]]
+        parts.append(Piece(_rot(pp_, c0, ang), patch, rng, kind="plain", t_place=t,
+                           stitch=("#2b2622", 5 * u, 4 * u, 1.3 * u), fabric_scale=u, margin=6, inset=3))
     dw, dh = w * rng.uniform(0.2, 0.27), h * rng.uniform(0.46, 0.58)
     dx = cx + door_side * w * 0.36
     door_poly = [(dx - dw / 2, base), (dx - dw / 2, base - dh), (dx + dw / 2, base - dh), (dx + dw / 2, base)]

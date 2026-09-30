@@ -110,7 +110,7 @@ TALL = dict(
     stakes=[(0.545 + 0.055 * k, 0.725 + 0.005 * k) for k in range(4)],
     intake=((0.345, 0.620), (0.300, 0.635)),
     andes=(0.30, [(0.14, 0.205, 0.15), (0.46, 0.17, 0.17), (0.82, 0.195, 0.15)]),
-    back_line=[(0.585, 0.43), (0.43, 0.575), (0.285, 0.715), (0.14, 0.86)],
+    back_line=[(0.585, 0.43), (0.47, 0.50), (0.33, 0.565), (0.16, 0.65)],        # la última, ante la casa roja
     araucarias=[(0.37, 0.335, 96), (0.455, 0.345, 80)],
 )
 
@@ -152,7 +152,7 @@ def build(W, H, seed=11):
     m = 40 * u   # margen hasta el borde de lana
     # --- cielo, sol y nubes -------------------------------------------------------------------------
     bake(Piece([(m, m), (W - m, m), (W - m, Y(Lz["sky"])), (m, Y(Lz["sky"]))], "#9fc4d8", rng, kind="plain",
-               stitch=None, fabric_scale=u, fray=0.6))
+               stitch=None, fabric_scale=u, fray=0.6, crisp=0.35))           # (tocuyo delgado: se ve la trama)
     sx, sy = P(*Lz["sun"])
     disc, rays = sun(sx, sy, 60 * u, rng, 0, u=u)
     bake(disc)
@@ -241,13 +241,17 @@ def build(W, H, seed=11):
     info["fence"] = (f0, f1)
 
     # --- casas, estanque del APR, árboles, ovejas, gente ---------------------------------------------------
-    looks = [dict(wall="#b7342b", roof="#77726c", k="plain"), dict(wall="#3f6fa5", roof="#6a6560", k="stripes"),
-             dict(wall="#e3b33c", roof="#7b7670", k="plain"), dict(wall="#e2d7c0", roof="#6b665f", k="gingham")]
+    # cada techo es otro: zinc oxidado, pizarreño en media agua, zinc gris con un parche, zinc pintado verde
+    looks = [dict(wall="#b7342b", roof="#8a5b45", k="plain", rk="cord", rs="gable", patch=None),
+             dict(wall="#3f6fa5", roof="#4f5863", k="stripes", rk="flannel", rs="shed", patch=None),
+             dict(wall="#e3b33c", roof="#7b7670", k="plain", rk="cord", rs="gable", patch="#a4583a"),
+             dict(wall="#e2d7c0", roof="#5d7a5f", k="gingham", rk="stripes", rs="gable", patch=None)]
     houses = [dict(c=P(*c), w=w_ * u, h=h_ * u, **lk) for (c, w_, h_), lk in zip(Lz["houses"], looks)]
     info["houses"] = []
     for i, hd in enumerate(houses):
         parts, wins, door = house(hd["c"][0], hd["c"][1], hd["w"], hd["h"], rng, 0, wall=hd["wall"],
-                                  roof=hd["roof"], wall_kind=hd["k"], windows=1, door_side=0.5 if i % 2 else -0.5, u=u)
+                                  roof=hd["roof"], wall_kind=hd["k"], windows=1, door_side=0.5 if i % 2 else -0.5, u=u,
+                                  roof_kind=hd["rk"], roof_style=hd["rs"], patch=hd["patch"])
         for p_ in parts:
             bake(p_)
         info["houses"].append(dict(center=np.array(hd["c"]), door=np.array(door), top=hd["c"][1] - hd["h"],
@@ -279,21 +283,35 @@ def build(W, H, seed=11):
             bake_yarn(y_)
         for c_ in crowns:
             bake(c_)
-    # ovejas de bouclé
+    # ovejas de bouclé, cada una distinta: una pastando, una echada, una café mirando, (un cordero)
+    styles = [dict(k=1.1, lie=False, head=(22, 2), wool=["#f1ede4", "#ebe4d6", "#f4f0e8"], face="#2b2522", rx=18, ry=10),
+              dict(k=0.95, lie=True, head=(18, -9), wool=["#e9e1cf", "#e2d8c3", "#efe8da"], face="#3a302a", rx=19, ry=8),
+              dict(k=1.0, lie=False, head=(19, -12), wool=["#7a6a5c", "#6f5f52", "#85766a"], face="#1f1a17", rx=15, ry=11),
+              dict(k=0.7, lie=False, head=(17, -8), wool=["#f4f0e8", "#ece6da"], face="#4a3d33", rx=15, ry=10)]
     for i_s, (fx, fy) in enumerate(Lz["sheep"]):
         cx, cy = P(fx, fy)
-        k_s = rng.uniform(0.85, 1.18)                  # cada oveja de su tamaño
-        side = -1 if i_s % 2 == 0 else 1               # y mirando hacia su lado
-        for leg in (-10, -4, 5, 11):
-            bake_yarn(Yarn([(cx + leg * u * k_s, cy), (cx + leg * u * k_s + rng.normal(0, 1), cy + 15 * u * k_s)],
-                           2.6 * u, "#2a2320", rng, fuzz=0.2))
-        for k in range(int(26 * k_s)):
+        st_ = styles[i_s % len(styles)]
+        k_s = st_["k"] * rng.uniform(0.93, 1.07)
+        side = -1 if i_s % 2 == 0 else 1               # cada una mirando hacia su lado
+        by_ = cy + (6 * u if st_["lie"] else 0)        # (la echada, sin patas y más abajo)
+        if not st_["lie"]:
+            for leg in rng.permutation([-10, -4, 5, 11])[:int(rng.integers(3, 5))]:
+                lg = float(leg) + rng.normal(0, 1.2)
+                bake_yarn(Yarn([(cx + lg * u * k_s, cy), (cx + lg * u * k_s + rng.normal(0, 1.5), cy + 15 * u * k_s)],
+                               2.6 * u, "#2a2320", rng, fuzz=0.2))
+        rx_, ry_ = st_["rx"] * u * k_s, st_["ry"] * u * k_s * (0.8 if st_["lie"] else 1.0)
+        for k in range(int(28 * k_s)):
             a = rng.uniform(0, 2 * np.pi)
             rr = np.sqrt(rng.uniform(0, 1))
-            bake_sprite(knot((cx + np.cos(a) * rr * 17 * u * k_s, cy - 6 * u + np.sin(a) * rr * 10 * u * k_s),
-                             rng.uniform(3.2, 4.4) * u, rng.choice(["#f1ede4", "#ebe4d6", "#f4f0e8"]), rng), shadow=0.35)
-        hy_ = cy - (10 + rng.uniform(-4, 5)) * u        # una pastando, otra mirando
-        bake_sprite(knot((cx + side * 20 * u * k_s, hy_), 5.5 * u, "#2b2522", rng))
+            bake_sprite(knot((cx + np.cos(a) * rr * rx_, by_ - 6 * u + np.sin(a) * rr * ry_),
+                             rng.uniform(3.0, 4.6) * u, rng.choice(st_["wool"]), rng), shadow=0.35)
+        hx_, hy_ = st_["head"]
+        bake_sprite(knot((cx + side * hx_ * u * k_s, by_ + hy_ * u * k_s * 0.6 - 6 * u), 5.5 * u * min(1.0, k_s + 0.2),
+                         st_["face"], rng))
+        if not st_["lie"] and hy_ < 0:                 # la que mira: una oreja
+            bake_sprite(Stitch.render((cx + side * (hx_ - 2) * u * k_s, by_ + hy_ * u * k_s * 0.6 - 9 * u),
+                                      (cx + side * (hx_ - 7) * u * k_s, by_ + hy_ * u * k_s * 0.6 - 12 * u),
+                                      2.4 * u, st_["face"], rng))
     # vecinas y vecinos de lana (sin carita): se animan en la escena; aquí solo su silueta a contraluz
     pp_ = Lz["people"]
     looks = [("#7d3c6a", "dots", "#e8dcc8", "#c68e67", "#3a2a20"), ("#2f6f4f", "gingham", "#e9e1cf", "#9a6a4b", "#1d1612"),
@@ -324,7 +342,7 @@ def build(W, H, seed=11):
             cv2.circle(back, (int(q_[0]), int(q_[1])), max(2, int(sw_ * 2.6)), 1.0, -1, cv2.LINE_AA)
     back = cv2.resize(back, (W, H), interpolation=cv2.INTER_AREA)
     back = np.clip(cv2.GaussianBlur(back, (0, 0), 0.9 * u) * 1.3, 0, 1)
-    T *= (1 - 0.72 * back)[..., None]
+    T *= (1 - 0.84 * back)[..., None]
     info["u"] = u
     info["W"], info["H"] = W, H
     info["stakes"] = [np.array(P(*p)) for p in Lz["stakes"]]

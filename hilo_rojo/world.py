@@ -391,7 +391,8 @@ class World:
         hand = float(spec.get("hand", 0.0))                # pulso de mano: los trazos no son de regla
 
         def trace(words, cap, base, k=1.0):
-            ws = [(*hershey_strokes_es(txt, fnt(kind), cap * 2 * k, 0, base * 2, anchor="left", ref="H"), kind)
+            ws = [(*hershey_strokes_es(txt, fnt(kind), cap * 2 * k, 0, base * 2, anchor="left", ref="H",
+                                       two_story_a=(kind == "small")), kind)
                   for (txt, kind) in words]
             gaps = [cap * 2 * k * (0.8 if "wool" in (ws[i][2], ws[i + 1][2]) else 0.64) for i in range(len(ws) - 1)]
             return ws, gaps, sum(w for _, w, _ in ws) + sum(gaps)
@@ -402,18 +403,22 @@ class World:
         refs = []                                  # (trazo, palabra): para el control de legibilidad
         word_id = 0
         wool_start = None
+        half_w = lambda kind: (2.7 if kind == "wool" else (1.25 if kind == "small" else 1.4)) * u2
         for (base, cap, words) in spec["lines"]:
             ws, gaps, total = trace(words, cap, base, fit)
             space_list = gaps + [0.0]
             x = cx - total / 2
             x_line0 = x
             ph_line = rng.uniform(0, 2 * np.pi)
+            line_words = []
             for (strokes, w, kind), space in zip(ws, space_list):
+                cut_x = 1e9
                 if kind == "wool":
                     xs_ = [float(np.mean(np.asarray(st_)[:, 0])) for st_ in strokes]
                     cut_x = max(xs_) - 0.16 * w if xs_ else 1e9      # la última letra
                 # bordado a mano: la línea base ondula a lo largo del renglón y cada letra tiene su giro,
-                # su tamaño y su altura (dos «a» nunca salen iguales); el punto y la tilde van con su letra
+                # su tamaño, su altura y su grosor (dos «a» nunca salen iguales); el punto y la tilde van
+                # con su letra
                 sts = [np.asarray(st_, np.float64) + np.array([x, 0.0]) for st_ in strokes]
                 gid = _glyph_groups(sts, 0.1 * cap * 2 * fit)
                 gtf = {}
@@ -424,26 +429,49 @@ class World:
                     sc_ = 1 + rng.normal(0, 0.03 if kind != "small" else 0.02)
                     R_ = np.array([[np.cos(th_), -np.sin(th_)], [np.sin(th_), np.cos(th_)]]) * sc_
                     wave = 1.5 * u2 * np.sin(2 * np.pi * (c_[0] - x_line0) / max(total * 1.15, 1.0) + ph_line)
-                    gtf[g] = (R_, c_, wave + rng.normal(0, 0.9 * u2))
+                    gw_ = float(np.clip(rng.normal(1.0, 0.16), 0.78, 1.3)) if kind == "floss" else 1.0
+                    gtf[g] = (R_, c_, wave + rng.normal(0, 0.9 * u2), gw_)
+                tr_sts = []
                 for i_s, st in enumerate(sts):
-                    R_, c_, dy_ = gtf[gid[i_s]]
+                    R_, c_, dy_, gw_ = gtf[gid[i_s]]
                     st = (st - c_) @ R_.T + c_ + np.array([0, dy_])
                     if hand > 0 and len(st) >= 2:
                         st = _hand_wobble(st, hand * cap * 2 * fit, rng)
+                    tr_sts.append((st, gw_))
+                line_words.append(dict(kind=kind, sts=tr_sts, x=x, cut_x=cut_x, id=word_id))
+                x += w + space
+                word_id += 1
+            # el mismo aire entre todas las palabras, medido en el bordado (con el grosor de cada hilo)
+            if len(line_words) > 1:
+                ext = [(min(float(st[:, 0].min()) for st, _ in lw["sts"]) - half_w(lw["kind"]),
+                        max(float(st[:, 0].max()) for st, _ in lw["sts"]) + half_w(lw["kind"])) for lw in line_words]
+                goal = 0.62 * cap * 2 * fit
+                shift, shifts = 0.0, [0.0]
+                for i_ in range(len(ext) - 1):
+                    shift += goal - (ext[i_ + 1][0] - ext[i_][1])
+                    shifts.append(shift)
+                mid = ((ext[0][0] + shifts[0]) + (ext[-1][1] + shifts[-1])) / 2 - (ext[0][0] + ext[-1][1]) / 2
+                for lw, sh_ in zip(line_words, shifts):
+                    d_ = sh_ - mid
+                    lw["x"] += d_
+                    lw["sts"] = [(st + np.array([d_, 0.0]), gw_) for st, gw_ in lw["sts"]]
+            for lw in line_words:
+                kind, x_w = lw["kind"], lw["x"]
+                for st, gw_ in lw["sts"]:
                     if kind == "wool":
                         if len(st) < 2:
                             continue
                         i_ = int(np.argmin(st[:, 0]))
                         if wool_start is None or st[i_, 0] < wool_start[0]:
                             wool_start = st[i_].copy()
-                        if float(np.mean(st[:, 0])) - x > cut_x:
+                        if float(np.mean(st[:, 0])) - x_w > lw["cut_x"]:
                             tail.append(st)                      # se borda al final, con la aguja
                             continue
                         y = Yarn(st, 5.4 * u2, WOOL, rng, fuzz=0.45, step=1.0)
                         items += y.chunks
-                        refs.append((st, word_id))
+                        refs.append((st, lw["id"]))
                         continue
-                    refs.append((st, word_id))
+                    refs.append((st, lw["id"]))
                     capx = cap * 2 * fit
                     size = float(max(np.ptp(st[:, 0]), np.ptp(st[:, 1])))
                     plen = float(np.sum(np.linalg.norm(np.diff(st, axis=0), axis=1))) if len(st) > 1 else 0.0
@@ -459,15 +487,14 @@ class World:
                         if chord < 3 * u2:
                             d_ = (b_ - a_) / max(chord, 1e-6)
                             a_, b_ = (a_ + b_) / 2 - d_ * 1.5 * u2, (a_ + b_) / 2 + d_ * 1.5 * u2
-                        items.append(Stitch.render(a_, b_, (2.0 if kind == "small" else 2.6) * u2, col_, rng))
+                        items.append(Stitch.render(a_, b_, (2.1 if kind == "small" else 2.6 * gw_) * u2, col_, rng))
                     elif kind == "small":
-                        for _, sp in backstitch(st, 3.4 * u2, 2.3 * u2, col_, rng, jitter=0.1, wvar=0.3):
+                        for _, sp in backstitch(st, 3.4 * u2, 2.5 * u2, col_, rng, jitter=0.1, wvar=0.3):
                             items.append(sp)
                     else:
-                        for _, sp in backstitch(st, 6.2 * u2, 2.5 * u2, dark, rng, jitter=0.2, wvar=0.25):
+                        # cada letra con su grosor (a veces el hilo se pasó dos veces)
+                        for _, sp in backstitch(st, 6.2 * u2, 2.5 * gw_ * u2, dark, rng, jitter=0.2, wvar=0.3):
                             items.append(sp)
-                x += w + space
-                word_id += 1
         # todo junto en una capa (se tuerce y se comba como una sola tela); el bordado, solo dentro de la tela
         layer_rgb = strip.rgb.copy()
         layer_a = strip.a.copy()

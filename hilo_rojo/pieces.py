@@ -58,9 +58,10 @@ def inset_poly(poly, d):
 class Piece:
     def __init__(self, poly, color, rng, kind="plain", color2=None, t_place=0.0, stitch=("#5a3b28", 8, 6, 1.9),
                  fabric_scale=1.0, angle=0.0, felt=None, puff=1.0, shadow=0.5, fray=1.0, inset=5.5, margin=10,
-                 rough=1.0, wear=1.0):
+                 rough=1.0, wear=1.0, crisp=None):
         poly = np.asarray(poly, np.float64)
         self.kind = kind
+        self.crisp = crisp
         if rough > 0:
             size = float(min(np.ptp(poly[:, 0]), np.ptp(poly[:, 1])))
             k = rough * float(np.clip(size / (140 * max(0.6, fabric_scale)), 0.2, 1.0))    # retazos chicos: tijera fina
@@ -109,8 +110,10 @@ class Piece:
         composite(canvas, self.sprite, shadow=self.shadow_k)
         from .thread import composite_T, composite_T_piece
         if T0 is not None and C is not None:
-            # la tela difunde la luz: la trama del saco apenas se adivina a través de ella
-            crisp = dict(felt=0.04, cord=0.1, flannel=0.1, satin=0.2).get(self.kind, 0.15)
+            # la tela difunde la luz: la trama del saco apenas se adivina a través de ella (solo se ve bajo la
+            # tela delgada, como el cielo)
+            crisp = self.crisp if self.crisp is not None else \
+                dict(felt=0.0, cord=0.02, flannel=0.02, satin=0.08).get(self.kind, 0.04)
             composite_T_piece(T, T0, C, self.sprite, crisp=crisp)
         else:
             composite_T(T, self.sprite)

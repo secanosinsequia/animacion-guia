@@ -18,10 +18,10 @@ python -m hilo_rojo.bolsillo web/hilvan/bolsillo.webp
 # Pósters: cuadro 0 (la aguja cuelga sobre la arpillera), el contraluz con la línea completa (7,0 s) y el final
 cp build/hilvan_1920x1080/u0000.png output/hilvan_poster_1920x1080_inicio.png
 cp build/hilvan_1920x1080/u0084.png output/hilvan_poster_1920x1080_contraluz.png
-cp build/hilvan_1920x1080/u0201.png output/hilvan_poster_1920x1080_final.png
+cp build/hilvan_1920x1080/u0202.png output/hilvan_poster_1920x1080_final.png
 cp build/hilvan_1080x1920/u0000.png output/hilvan_poster_1080x1920_inicio.png
 cp build/hilvan_1080x1920/u0084.png output/hilvan_poster_1080x1920_contraluz.png
-cp build/hilvan_1080x1920/u0201.png output/hilvan_poster_1080x1920_final.png
+cp build/hilvan_1080x1920/u0202.png output/hilvan_poster_1080x1920_final.png
 # Vista previa liviana en GIF (480 px, una de cada dos imágenes únicas)
 FF=$(python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())")
 "$FF" -y -loglevel error -framerate 12 -i build/hilvan_1920x1080/u%04d.png \

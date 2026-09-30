@@ -276,9 +276,10 @@ def transmission(rgb_lin, hgt, kind):
     mx = np.maximum(c.max(axis=-1, keepdims=True), 1e-3)
     luma = (c * np.array([0.3, 0.55, 0.15], np.float32)).sum(-1, keepdims=True)
     tint = (c / mx) ** 1.6 * np.clip(luma, 0, 1) ** 0.35
-    # vitral profundo, no verde limón: los verdes se oscurecen hacia esmeralda
+    # algodón teñido a contraluz: brilla tibio (la luz de la lámpara), con el color del tinte apagado; los
+    # verdes se oscurecen (nada de verde limón)
     gray = tint.mean(axis=-1, keepdims=True)
-    tint = gray + (tint - gray) * 0.85
+    tint = gray + (tint - gray) * 0.6
     tint[..., 1] *= 0.86
     return (tint * (k * dens if np.ndim(dens) == 0 else k * dens[..., None])).astype(np.float32)
 

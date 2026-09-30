@@ -144,7 +144,7 @@
 <section class="hero" id="hero" aria-labelledby="titulo">
   <div class="hero__sticky">
     <canvas id="arpillera" role="img"
-            aria-label="Una arpillera chilena cuelga de un cordel de cáñamo: un valle de retazos con la cordillera, río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro estacas de topógrafo, un aviso prendido al cerco, una cañería con su llave de paso que sale del río y el contorno de una torre de alta tensión; al tensar el hilo, la tela se frunce. Se apaga la sala y una lámpara de mano recorre el revés: es un solo hilo, y detrás de la torre viene toda una línea de torres que cruza el valle y pasa sobre las casas. Una vecina calca esa ruta por delante con lana roja, con un lazo en cada torre, y la lana pasa de mano en mano mientras se encienden las ventanas. Luego tira del hilván: la torre se descose y toda la ruta escondida se frunce y se suelta, dejando solo pinchazos. La lana sube al cordel, el rojo corre hasta las arpilleras de otros territorios y enciende sus ventanas, y la aguja del comienzo borda la última letra de «Alerta» en la tira del título."></canvas>
+            aria-label="Una arpillera chilena cuelga de un cordel de cáñamo: un valle de retazos con la cordillera, río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro estacas de topógrafo, un aviso prendido al cerco, una cañería con su llave de paso que sale del río y el contorno de una torre de alta tensión; al tensar el hilo, la tela se frunce. Se apaga la sala y una lámpara de mano recorre el revés: es un solo hilo, y detrás de la torre viene toda una línea de torres que cruza el valle y llega hasta la puerta de una casa. Con lana roja se calca esa ruta por delante, con un nudo en cada torre, y la lana pasa de mano en mano mientras se encienden las ventanas. Luego una vecina tira del hilván: la torre se descose, toda la ruta escondida se frunce y se suelta, y a contraluz el revés queda vacío, solo con los pinchazos. La lana sube al cordel, el rojo corre hasta las arpilleras de otros territorios y enciende sus ventanas, y la aguja del comienzo borda la última letra de «Alerta» en la tira del título."></canvas>
     <ol class="stops" aria-live="polite">
       <li class="stop stop--title" data-t0="0" data-t1="1.17">
         <p class="stop__k">Guía SATC · Conocer</p>
@@ -161,20 +161,20 @@
         <p class="stop__k">Vigilar</p>
         <p>…y la torre, todavía solo un contorno. Cuando el hilo se tensa, la tela se frunce entre las casas.</p>
       </li>
-      <li class="stop" data-t0="4.62" data-t1="7.5">
+      <li class="stop" data-t0="4.62" data-t1="7.75">
         <p class="stop__k">Alertar</p>
         <p>A contraluz aparece el revés: no eran señales sueltas. <em>Es un solo hilo</em>, y detrás de la torre
-           viene toda una línea que pasa sobre las casas.</p>
+           viene toda una línea que llega hasta la puerta de una casa.</p>
       </li>
-      <li class="stop" data-t0="7.5" data-t1="9.6">
+      <li class="stop" data-t0="7.75" data-t1="9.42">
         <p class="stop__k">Responder</p>
-        <p>Una vecina calca con lana roja la ruta escondida, torre por torre, y la lana pasa de mano en mano.</p>
+        <p>Con lana roja se calca por delante la ruta escondida, torre por torre, y la lana pasa de mano en mano.</p>
       </li>
-      <li class="stop" data-t0="9.6" data-t1="11.67">
+      <li class="stop" data-t0="9.42" data-t1="11.9">
         <p class="stop__k">Responder</p>
         <p>Y el hilván se saca entero, antes de que sea costura: por el revés solo quedan los pinchazos.</p>
       </li>
-      <li class="stop stop--end" data-t0="11.67" data-t1="99">
+      <li class="stop stop--end" data-t0="11.9" data-t1="99">
         <p class="stop__k">Red Comunitaria de Alerta Energética</p>
         <p>La lana roja llega al cordel del que cuelgan otros territorios: <em>una red de alerta.</em></p>
         <p><a href="#carta">Leer la carta ↓</a></p>
@@ -223,15 +223,16 @@
 (() => {
   // --- Configuración --------------------------------------------------------------------------------
   const UFPS = 12;             // imágenes únicas por segundo (stop-motion «en dos»)
-  const TOTAL = 202;           // 16,85 s
+  const TOTAL = 203;           // 16,93 s
   const SETS = {
     landscape: { dir: "frames/landscape/", w: 16, h: 9 },
     tall:      { dir: "frames/tall/",      w: 9,  h: 16 },
   };
   // scroll (en alturas de pantalla) -> tiempo (s): con descansos donde se lee cada parada
-  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.75, 6.58], [5.35, 7.34],
-                [5.5, 7.67], [6.4, 9.08], [7.3, 11.0], [7.7, 11.59], [8.4, 13.17], [8.95, 14.57], [9.3, 15.9], [9.5, 16.85]];
-  const STOPS_T = [1.17, 3.3, 4.62, 7.5, 9.6, 11.67];   // nudos del hilo de avance
+  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.95, 6.83], [5.55, 7.59],
+                [5.7, 7.92], [6.55, 9.33], [7.45, 10.84], [7.95, 11.84], [8.65, 13.42], [9.2, 14.82], [9.55, 15.92],
+                [9.75, 16.93]];
+  const STOPS_T = [1.17, 3.3, 4.62, 7.75, 9.42, 11.9];   // nudos del hilo de avance
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const hero = document.getElementById("hero");
