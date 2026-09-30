@@ -45,39 +45,49 @@ TOES_FAR = [[(0.0, -0.006), (0.075, -0.011)], [(0.0, -0.006), (-0.022, -0.006)]]
 NECK_STUB = [(0.15, -0.655), (0.152, -0.676), (0.203, -0.68), (0.205, -0.666)]
 
 # Cabeza y cuello (se transforman con la pose). Pivote en la base del cuello.
-PIVOT = np.array([0.178, -0.665])
-HEAD_C = np.array([0.20, -0.738])
-HEAD_R = 0.073
-BILL = [(0.262, -0.750), (0.336, -0.738), (0.339, -0.732), (0.265, -0.727)]
-BILL_TIP = [(0.31, -0.742), (0.339, -0.735), (0.311, -0.731)]
-EYE = np.array([0.222, -0.749])
-CREST = [[(0.165, -0.792), (0.11, -0.816), (0.05, -0.83), (0.0, -0.832), (-0.042, -0.822)],
-         [(0.17, -0.79), (0.12, -0.806), (0.07, -0.814), (0.03, -0.812)]]
-FOREHEAD = [(0.263, -0.748), (0.256, -0.773), (0.239, -0.794), (0.214, -0.803), (0.222, -0.783),
-            (0.238, -0.764), (0.25, -0.749)]
-THROAT = [(0.262, -0.727), (0.252, -0.708), (0.243, -0.69), (0.236, -0.668), (0.222, -0.672),
-          (0.23, -0.692), (0.242, -0.713), (0.254, -0.73)]
-WHITE_BROW = [(0.266, -0.757), (0.251, -0.786), (0.227, -0.806), (0.196, -0.81)]
-NECK_BACK = (0.145, -0.66)     # base del cuello (dorso)
-NECK_FRONT = (0.212, -0.668)   # base del cuello (pecho)
-HEAD_BACK = (0.137, -0.715)    # nuca (en la cabeza)
-HEAD_THROAT = (0.238, -0.683)  # garganta (en la cabeza)
+PIVOT = np.array([0.175, -0.662])
+HEAD_C = np.array([0.200, -0.748])
+HEAD_R = 0.090
+BILL_UP = [(0.284, -0.762), (0.368, -0.747), (0.366, -0.742), (0.30, -0.748)]
+BILL_LO = [(0.30, -0.748), (0.362, -0.743), (0.354, -0.738), (0.286, -0.735)]
+BILL_HINGE = np.array([0.288, -0.745])
+BILL = [(0.284, -0.762), (0.368, -0.747), (0.354, -0.738), (0.286, -0.735)]
+EYE = np.array([0.236, -0.766])
+EYE_R = 0.0145
+CREST = [[(0.16, -0.822), (0.11, -0.850), (0.05, -0.868), (-0.005, -0.872), (-0.05, -0.863)],
+         [(0.165, -0.818), (0.115, -0.840), (0.07, -0.852), (0.03, -0.852)]]
+FACE_MASK = [(0.290, -0.762), (0.285, -0.784), (0.273, -0.803), (0.256, -0.818), (0.236, -0.826),
+             (0.232, -0.812), (0.247, -0.800), (0.260, -0.785), (0.268, -0.766), (0.271, -0.748),
+             (0.266, -0.727), (0.254, -0.705), (0.238, -0.687), (0.224, -0.673), (0.246, -0.667),
+             (0.264, -0.683), (0.279, -0.703), (0.288, -0.725), (0.290, -0.737)]
+WHITE_BORDER = [(0.222, -0.838), (0.214, -0.814), (0.230, -0.797), (0.244, -0.783), (0.250, -0.766)]
+NECK_BACK = (0.132, -0.655)    # base del cuello (dorso)
+NECK_FRONT = (0.218, -0.668)   # base del cuello (pecho)
+HEAD_BACK_A = np.deg2rad(152)  # ángulo en la cabeza donde nace la nuca (abajo-atrás)
+HEAD_THROAT_A = np.deg2rad(62)
+# compatibilidad con la bandada (aves pequeñas)
+HEAD_BACK = (0.115, -0.779)
+HEAD_THROAT = (0.242, -0.668)
+FOREHEAD = FACE_MASK[:10]
+THROAT = FACE_MASK[9:]
 
 
 class Queltehue:
-    """La vigía. El cuerpo es un sprite fijo; cabeza, cuello, cresta y ojo se recalculan por cuadro.
+    """La vigía. El cuerpo es un sprite fijo; cabeza, cuello, cresta, pico y ojo se recalculan por cuadro.
 
     Todo se pinta sobre el papel limpio (reserva) y luego se compone sobre el paisaje, como hace
     una ilustradora que deja el ave en blanco al pintar el fondo.
     """
 
-    def __init__(self, feet_xy, size, seed=4, t_alert=0.95, t_eye=1.08, t_sleep=4.30):
+    def __init__(self, feet_xy, size, seed=4, t_alert=0.70, t_eye=0.80, t_shout=1.40, t_shout_end=1.72,
+                 t_sleep=4.18):
         self.fx, self.fy = feet_xy
         self.S = size
         self.seed = seed
         self.t_alert, self.t_eye, self.t_sleep = t_alert, t_eye, t_sleep
+        self.t_shout, self.t_shout_end = t_shout, t_shout_end
         s = size
-        self.bbox = (int(self.fx - 0.50 * s), int(self.fy - 0.95 * s), int(self.fx + 0.46 * s),
+        self.bbox = (int(self.fx - 0.50 * s), int(self.fy - 0.98 * s), int(self.fx + 0.52 * s),
                      int(self.fy + 0.06 * s))
         x0, y0, x1, y1 = self.bbox
         self.w, self.h = x1 - x0, y1 - y0
@@ -98,7 +108,7 @@ class Queltehue:
         return np.stack([self.fx - x0 + pts[:, 0] * self.S, self.fy - y0 + pts[:, 1] * self.S], 1)
 
     def head_angle(self, t):
-        relaxed, alert = np.deg2rad(16), np.deg2rad(-7)
+        relaxed, alert = np.deg2rad(14), np.deg2rad(-6)
         if t < self.t_alert - 0.1:
             a = relaxed
         elif t < self.t_alert:  # anticipación: se agacha un poco más
@@ -113,16 +123,30 @@ class Queltehue:
             a = a + (relaxed - a) * v
         return a
 
+    def shout(self, t):
+        """0..1: grito (cabeza hacia adelante y pico abierto), con anticipación."""
+        a, b = self.t_shout, self.t_shout_end
+        if t < a - 0.07 or t > b + 0.12:
+            return 0.0, 0.0
+        if t < a:  # anticipación: recoge la cabeza
+            return -0.35 * np.sin((t - (a - 0.07)) / 0.07 * np.pi / 2), 0.0
+        if t <= b:
+            u = np.clip((t - a) / 0.05, 0, 1)
+            return 1 - (1 - u) ** 3, u
+        v = np.clip((t - b) / 0.12, 0, 1)
+        return 1 - v * v * (3 - 2 * v), 1 - v
+
     def neck_stretch(self, t):
         a = self.head_angle(t)
-        return 1.0 + 0.10 * np.clip((np.deg2rad(16) - a) / np.deg2rad(23), -0.3, 1.3)
+        return 1.0 + 0.10 * np.clip((np.deg2rad(14) - a) / np.deg2rad(20), -0.3, 1.3)
 
     def head_tf(self, t):
         a = self.head_angle(t)
         st = self.neck_stretch(t)
+        fwd, _ = self.shout(t)
         c, s = np.cos(a), np.sin(a)
         R = np.array([[c, -s], [s, c]])
-        lift = np.array([0.008, -0.030]) * (st - 1.0) / 0.10
+        lift = np.array([0.008, -0.034]) * (st - 1.0) / 0.10 + np.array([0.034, -0.004]) * fwd
 
         def f(pts):
             p = np.asarray(pts, np.float64).reshape(-1, 2) - PIVOT
@@ -147,12 +171,12 @@ class Queltehue:
         self.mask.fill_poly(pts_screen, alpha)
         return self.mask.array()
 
-    def _wc(self, m, edge=0.5, rough=True):
+    def _wc(self, m, edge=0.5, rough=True, tex=0.32):
         """Relleno plano -> mancha de acuarela: borde irregular, oscurecido y pigmento irregular."""
         if rough:
             m = cv2.remap(m, self._gx + self.dx, self._gy + self.dy, cv2.INTER_LINEAR)
         rim = np.clip(m - cv2.GaussianBlur(m, (0, 0), 1.8 * max(self.u, 0.6)), 0, 1)
-        return np.clip(m * (0.80 + 0.32 * self.tex) + edge * rim * 1.8, 0, 1.4)
+        return np.clip(m * ((1 - tex * 0.6) + tex * self.tex) + edge * rim * 1.8, 0, 1.4)
 
     @staticmethod
     def _glaze(reg, m, col, k):
@@ -199,83 +223,85 @@ class Queltehue:
         m_belly = self._fill(self.to_screen(_curve(BELLY, 8, closed=True)))
         m_wing = self._fill(self.to_screen(_curve(WING, 8, closed=True)))
         cover = np.maximum(cover, m_body)
-        # base de todo el cuerpo: aguada gris parda (el blanco y el negro van encima, sin huecos)
-        m_stub = self._fill(self.to_screen(_curve(NECK_STUB, 4, closed=True)))
-        self._glaze(reg, self._wc(np.clip(m_body + m_stub, 0, 1), 0.55), brown, 0.95)
-        cover = np.maximum(cover, m_stub)
-        # vientre blanco de gouache, con textura seca del papel
+        self._glaze(reg, self._wc(m_body, 0.55), brown, 0.95)
         dry = 0.80 + 0.20 * smoothstep(0.3, 0.62, ph)
         self._over(reg, self._wc(m_belly, 0.0) * dry, white, 0.94)
-        # sombra suave bajo el vientre (volumen)
         m_bshadow = self._fill(self.to_screen(_curve([(0.20, -0.47), (0.10, -0.39), (-0.05, -0.35),
                                                       (-0.20, -0.375), (-0.30, -0.41), (-0.10, -0.40),
                                                       (0.08, -0.42)], 6, closed=True)))
         self._glaze(reg, cv2.GaussianBlur(m_bshadow, (0, 0), 4 * self.u) * m_belly, grey, 0.55)
-        # ala más oscura, hombro bronceado
         self._glaze(reg, self._wc(m_wing, 0.7), sepia, 0.55)
         self._glaze(reg, self._wc(self._fill(self.to_screen(_curve(SHOULDER, 6, closed=True))), 0.35),
                     bronze, 0.9)
-        # negros: primarias, banda caudal, babero
+        # negros limpios (tinta plena con borde seco apenas irregular)
         blk = np.zeros_like(m_body)
         for poly in (PRIMARIES, TAILBAND, BIB):
             blk = np.maximum(blk, self._fill(self.to_screen(_curve(poly, 6, closed=True))))
-        drys = 0.86 + 0.14 * smoothstep(0.35, 0.65, self.tex2)
-        self._over(reg, self._wc(blk, 0.2) * drys, ink, 0.94)
-        # patas: aguada cálida entre dos líneas
+        self._over(reg, self._wc(blk, 0.1, tex=0.06), ink, 0.95)
+        # patas
         for leg, w in ((LEG_FAR, 0.010), (LEG_NEAR, 0.012)):
             lp = self.to_screen(_curve(leg, 6))
-            m_leg = np.zeros_like(m_body)
             self.mask.clear()
             Stroke(lp, w * self.S, rng, taper=(0.02, 0.02), pool=0.0, jitter=0.03).draw(self.mask, 10)
             m_leg = self.mask.array()
             self._glaze(reg, m_leg, lin("#8a6b58"), 0.9)
             cover = np.maximum(cover, m_leg)
 
-        # --- plumilla ---
+        # --- plumilla de grosor variable (1–4 px): gruesa en la sombra, fina a la luz ---
         strokes = []
         bc = _curve(BODY, 12, closed=True)
         n = len(bc)
-        # vientre y pecho: línea más gruesa (lado en sombra); dorso: más fina y con cortes
-        for (a, b, w) in [(0.02, 0.30, 3.4), (0.33, 0.55, 3.0), (0.60, 0.74, 2.2), (0.78, 0.97, 2.4)]:
+        for (a, b, w, jit) in [(0.02, 0.30, 4.0, 0.25), (0.33, 0.55, 3.4, 0.25), (0.60, 0.74, 1.6, 0.3),
+                               (0.78, 0.97, 1.3, 0.35)]:
             strokes.append(Stroke(self.to_screen(bc[int(a * n):int(b * n)]), w * self.u, rng, pool=0.45,
-                                  smooth=False))
+                                  smooth=False, jitter=jit))
         wc_ = _curve(WING, 10, closed=False)
         k = len(wc_)
-        strokes.append(Stroke(self.to_screen(wc_[:k // 2]), 2.4 * self.u, rng, pool=0.35, smooth=False))
-        strokes.append(Stroke(self.to_screen(wc_[k // 2 - 2:k - 3]), 2.0 * self.u, rng, pool=0.3, smooth=False))
-        # plumas del ala (escamas) y terciarias
+        strokes.append(Stroke(self.to_screen(wc_[:k // 2]), 2.6 * self.u, rng, pool=0.35, smooth=False, jitter=0.3))
+        strokes.append(Stroke(self.to_screen(wc_[k // 2 - 2:k - 3]), 1.8 * self.u, rng, pool=0.3, smooth=False))
         for row in range(3):
             for j in range(7 - row):
                 u = j / 6.0
                 x = 0.09 - 0.30 * u - row * 0.05 + rng.normal(0, 0.006)
                 y = -0.585 + 0.10 * u + row * 0.032 + rng.normal(0, 0.006)
                 pts = [(x + 0.028, y - 0.012), (x + 0.004, y + 0.006), (x - 0.03, y + 0.01)]
-                strokes.append(self._S(pts, 1.25, rng, pool=0.12, taper=(0.3, 0.4)))
+                strokes.append(self._S(pts, rng.uniform(0.9, 1.6), rng, pool=0.12, taper=(0.3, 0.4)))
         for j in range(4):
             y0_ = -0.448 - 0.006 * j
             strokes.append(self._S([(-0.13 - 0.02 * j, y0_ - 0.01), (-0.28, y0_ + 0.006),
                                     (-0.43 + 0.01 * j, -0.436 - 0.001 * j)], 1.3, rng, pool=0.15))
-        # patas y dedos (contorno)
-        for leg, w in ((LEG_FAR, 1.8), (LEG_NEAR, 2.1)):
+        for leg, w in ((LEG_FAR, 1.6), (LEG_NEAR, 2.1)):
             lp = np.asarray(leg)
-            for side in (-1, 1):
+            for side, ww in ((-1, 1.0), (1, 0.6)):
                 off = np.array([0.0055 * side, 0.0])
-                strokes.append(self._S(lp + off, w * 0.8, rng, taper=(0.05, 0.1), pool=0.2, jitter=0.05))
+                strokes.append(self._S(lp + off, w * ww, rng, taper=(0.05, 0.1), pool=0.2, jitter=0.05))
         for toe in TOES_NEAR + TOES_FAR:
             strokes.append(self._S(toe, 1.7, rng, pool=0.35, taper=(0.05, 0.5)))
-        # pasto bajo los pies
-        for j in range(26):
-            x = rng.uniform(-0.36, 0.40)
-            hh = rng.uniform(0.025, 0.085)
-            lean = rng.normal(0.015, 0.025)
-            strokes.append(self._S([(x, 0.01), (x + lean * 0.4, -hh * 0.5), (x + lean, -hh)], 1.35, rng,
-                                   taper=(0.02, 0.7), pool=0.1))
+        for j in range(30):
+            x = rng.uniform(-0.38, 0.42)
+            hh = rng.uniform(0.02, 0.10) * (1.4 if rng.random() < 0.15 else 1.0)
+            lean = rng.normal(0.01, 0.035)
+            strokes.append(self._S([(x, 0.01), (x + lean * 0.4, -hh * 0.5), (x + lean, -hh)], rng.uniform(0.9, 1.7),
+                                   rng, taper=(0.02, 0.7), pool=0.1))
         ink_a = self._strokes_mask(strokes)
         self._over(reg, ink_a, ink, 0.95)
         cover = np.maximum(cover, ink_a)
         return reg, np.clip(cover * 1.4, 0, 1)
 
     # --- cabeza animada ---------------------------------------------------------------------------------
+    def _head_outline(self, t):
+        """Silueta continua cuello+cabeza (sin «tubo»): nuca, arco del cráneo, frente, garganta."""
+        f = self.head_tf(t)
+        nb, nf = np.array(NECK_BACK), np.array(NECK_FRONT)
+        a_back, a_th = HEAD_BACK_A, HEAD_THROAT_A
+        hb_ = f([HEAD_C + HEAD_R * np.array([np.cos(a_back), np.sin(a_back)])])[0]
+        ht = f([HEAD_C + HEAD_R * np.array([np.cos(a_th), np.sin(a_th)])])[0]
+        back = _curve([nb + (0.006, 0.03), nb, (nb + hb_) / 2 + (0.010, 0.0), hb_], 8)
+        arc_a = np.linspace(a_back, 2 * np.pi + a_th, 60)
+        arc = f(np.stack([HEAD_C[0] + HEAD_R * np.cos(arc_a), HEAD_C[1] + HEAD_R * np.sin(arc_a)], 1))
+        front = _curve([ht, (ht + nf) / 2 + (0.012, 0.0), nf], 8)
+        return back, arc, front
+
     def head_sprite(self, t, paper_rgb, ink, white, red):
         x0, y0, x1, y1 = self.bbox
         reg = paper_rgb[y0:y1, x0:x1].copy()
@@ -283,71 +309,75 @@ class Queltehue:
         f = self.head_tf(t)
         hs = lambda p: self.to_screen(f(p))
         grey = lin("#8f8a80")
+        fwd, gape = self.shout(t)
 
-        # cuello: casco suave entre la base (fija) y la cabeza (móvil)
-        nb, nf = np.array(NECK_BACK), np.array(NECK_FRONT)
-        hb_, ht = f([HEAD_BACK])[0], f([HEAD_THROAT])[0]
-        back = _curve([nb + (0.006, 0.02), nb, (nb + hb_) / 2 + (-0.007, 0.0), hb_], 8)
-        front = _curve([ht, (ht + nf) / 2 + (0.009, 0.0), nf, nf + (-0.006, 0.003)], 8)
-        neck = self.to_screen(np.vstack([back, front]))
-        ang = np.linspace(0, 2 * np.pi, 56)
-        headc = np.stack([HEAD_C[0] + HEAD_R * np.cos(ang), HEAD_C[1] + HEAD_R * np.sin(ang)], 1)
-        m_neck = self._fill(neck)
-        m_head = self._fill(hs(headc))
-        m_gray = np.clip(m_neck + m_head, 0, 1)
-        self._glaze(reg, self._wc(m_gray, 0.5), grey, 0.95)
-        # frente y garganta negras (la garganta baja al babero), pico
-        blk = np.maximum(self._fill(hs(_curve(FOREHEAD, 6, closed=True))),
-                         self._fill(hs(_curve(THROAT, 6, closed=True))))
-        self._over(reg, self._wc(blk, 0.15), ink, 0.94)
-        m_bill = self._fill(hs(BILL))
-        self._glaze(reg, m_bill, lin("#7a5a4a"), 1.0)
-        self._over(reg, self._fill(hs(BILL_TIP)), ink, 0.95)
-        cover = np.clip(m_gray + blk + m_bill, 0, 1)
-
-        # ceja blanca que bordea la frente negra
+        back, arc, front = self._head_outline(t)
+        # cierre por encima de la pechera (no la tapa) y hacia adentro del dorso
+        close = np.array([(0.19, -0.669), (0.158, -0.663), (0.14, -0.642)])
+        sil = self.to_screen(np.vstack([back, arc, front, close]))
+        m_sil = self._fill(sil)
+        self._glaze(reg, self._wc(m_sil, 0.5), grey, 0.95)
+        # mejilla algo más clara (volumen)
+        chk = hs(np.stack([HEAD_C[0] + 0.012 + 0.045 * np.cos(np.linspace(0, 6.3, 20)),
+                           HEAD_C[1] + 0.012 + 0.035 * np.sin(np.linspace(0, 6.3, 20))], 1))
+        self._over(reg, cv2.GaussianBlur(self._fill(chk), (0, 0), 3 * self.u) * m_sil, white, 0.18)
+        # antifaz negro continuo: frente -> garganta -> (cuello) -> pechera
+        m_mask = self._fill(hs(_curve(FACE_MASK, 5, closed=True)))
         self.mask.clear()
-        Stroke(hs(WHITE_BROW), 2.6 * self.u, rng, pool=0.2, jitter=0.05).draw(self.mask, 10)
-        self._over(reg, self.mask.array(), white, 0.85)
+        Stroke(self.to_screen(np.vstack([front, [(0.212, -0.655)]]) + np.array([-0.012, 0.0])), 0.036 * self.S, rng,
+               pool=0.2, jitter=0.03, taper=(0.02, 0.02),
+               smooth=False).draw(self.mask, 10)
+        m_mask = np.maximum(m_mask, self.mask.array())
+        self._over(reg, self._wc(m_mask, 0.1, tex=0.05), ink, 0.95)
+        # borde blanco del antifaz
+        self.mask.clear()
+        Stroke(hs(WHITE_BORDER), 1.7 * self.u, rng, pool=0.1, jitter=0.05, taper=(0.3, 0.5)).draw(self.mask, 10)
+        self._over(reg, self.mask.array() * m_sil, white, 0.9)
 
-        # plumilla de la cabeza y el cuello
-        nbk = len(back)
-        strokes = [Stroke(self.to_screen(back[nbk // 3:]), 2.2 * self.u, rng, pool=0.3, smooth=False, jitter=0.05,
-                          taper=(0.35, 0.1))]
-        a0 = np.linspace(-0.25, 1.6, 14)
-        a1 = np.linspace(2.0, 4.4, 14)
-        for aa, w in ((a0, 2.6), (a1, 2.2)):
-            arc = np.stack([HEAD_C[0] + HEAD_R * np.cos(aa), HEAD_C[1] + HEAD_R * np.sin(aa)], 1)
-            strokes.append(Stroke(hs(arc), w * self.u, rng, pool=0.3, smooth=False, jitter=0.04))
-        strokes.append(Stroke(hs([BILL[0], BILL[1]]), 1.8 * self.u, rng, pool=0.3, smooth=False))
-        strokes.append(Stroke(hs([BILL[2], BILL[3]]), 1.6 * self.u, rng, pool=0.3, smooth=False))
-        # plumillas cortas en el cuello (volumen)
-        for j in range(6):
-            v = j / 5
-            p0 = (1 - v) * np.array(NECK_BACK) + v * np.array(HEAD_BACK) + np.array([0.02, 0.005])
-            strokes.append(Stroke(self.to_screen(np.array([p0, p0 + (0.018, 0.006)])), 1.0 * self.u, rng,
-                                  pool=0.05, smooth=False, taper=(0.3, 0.5)))
-        # cresta: se eriza en la alerta
+        # pico: el inferior se abre 20° al gritar
+        g = np.deg2rad(22) * gape
+        cg, sg = np.cos(g), np.sin(g)
+        lo = (np.asarray(BILL_LO) - BILL_HINGE) @ np.array([[cg, -sg], [sg, cg]]).T + BILL_HINGE
+        m_up = self._fill(hs(BILL_UP))
+        m_lo = self._fill(hs(lo))
+        if gape > 0.05:  # interior de la boca
+            mouth = np.vstack([np.asarray(BILL_UP)[[0, 3]], lo[[0]]])
+            self._over(reg, self._fill(hs(mouth)), lin("#4a2a22"), 0.9)
+        self._glaze(reg, np.maximum(m_up, m_lo), lin("#7a5a4a"), 1.0)
+        tip_up = [(0.34, -0.752), (0.368, -0.747), (0.366, -0.742), (0.34, -0.745)]
+        self._over(reg, self._fill(hs(tip_up)), ink, 0.95)
+        cover = np.clip(m_sil + m_up + m_lo + m_mask, 0, 1)
+
+        # plumilla: nuca y cráneo con grosor variable (fino arriba, grueso en la nuca)
+        strokes = [Stroke(self.to_screen(back[len(back) // 3:]), 3.2 * self.u, rng, pool=0.3, smooth=False,
+                          jitter=0.12, taper=(0.3, 0.1))]
+        na = len(arc)
+        strokes.append(Stroke(self.to_screen(arc[:na // 2]), 1.5 * self.u, rng, pool=0.3, smooth=False, jitter=0.15))
+        strokes.append(Stroke(self.to_screen(arc[na // 2:int(na * 0.78)]), 1.2 * self.u, rng, pool=0.2,
+                              smooth=False, taper=(0.3, 0.5)))
+        strokes.append(Stroke(hs(BILL_UP[:2]), 1.4 * self.u, rng, pool=0.25, smooth=False))
+        strokes.append(Stroke(hs(lo[1:]), 1.2 * self.u, rng, pool=0.25, smooth=False))
+        # cresta: se eriza en la alerta (trazos que se afinan)
         e = self.crest_erect(t)
         for j, cr in enumerate(CREST):
             cr = np.asarray(cr, np.float64)
             base = cr[0]
             rel = cr - base
-            a = np.deg2rad(-22 + 44 * e - 3 * j)
+            a = np.deg2rad(-8 + 36 * e - 4 * j)
             c, s = np.cos(a), np.sin(a)
             rel = rel @ np.array([[c, -s], [s, c]]).T
-            strokes.append(Stroke(hs(rel + base), (3.0 - 0.9 * j) * self.u, rng, taper=(0.04, 0.9), pool=0.2,
-                                  jitter=0.04))
-        # grito: «quel-te-hue» (marcas de voz junto al pico)
-        cry = np.clip((t - self.t_eye) / 0.05, 0, 1) * np.clip(1 - (t - self.t_eye - 0.28) / 0.12, 0, 1)
-        if cry > 0.01:
-            tip = f([BILL[1]])[0]
-            for j in range(3):
-                r0 = 0.034 + 0.026 * j
-                aa = np.linspace(-0.55, 0.55, 8) + np.deg2rad(-12)
-                arc = np.stack([tip[0] + 0.01 + r0 * np.cos(aa), tip[1] - 0.004 + r0 * np.sin(aa)], 1)
-                strokes.append(Stroke(self.to_screen(arc), 2.0 * self.u, rng, pool=0.2, smooth=False,
-                                      taper=(0.3, 0.3), alpha=cry))
+            strokes.append(Stroke(hs(rel + base), (3.4 - 1.1 * j) * self.u, rng, taper=(0.03, 0.92), pool=0.25,
+                                  jitter=0.05))
+        # grito: tres trazos de tinta que salen del pico (no «ondas»)
+        if gape > 0.05:
+            tip = f([(0.37, -0.742)])[0]
+            for j, ang in enumerate((-32, -4, 24)):
+                r = np.deg2rad(ang)
+                d = np.array([np.cos(r), np.sin(r)])
+                p0 = tip + d * (0.03 + 0.01 * j % 2)
+                p1 = tip + d * (0.085 + 0.012 * (j == 1))
+                strokes.append(Stroke(self.to_screen(np.array([p0, (p0 + p1) / 2, p1])), 3.0 * self.u * gape, rng,
+                                      pool=0.4, smooth=False, taper=(0.05, 0.9)))
         ink_a = self._strokes_mask(strokes)
         self._over(reg, ink_a, ink, 0.95)
         cover = np.maximum(cover, ink_a)
@@ -355,12 +385,12 @@ class Queltehue:
         # el ojo
         o = self.eye_open(t)
         ec = hs([EYE])[0]
-        r = 0.0125 * self.S
+        r = EYE_R * self.S
         m = self.mask
         if o > 0.02:
             m.clear()
-            m.dot(ec[0], ec[1], r * 1.3, 1.0)
-            self._over(reg, m.array(), ink, 0.9)
+            m.dot(ec[0], ec[1], r * 1.32, 1.0)
+            self._over(reg, m.array(), ink, 0.92)
             m.clear()
             c = m.ctx
             c.save()
@@ -379,14 +409,14 @@ class Queltehue:
             self._over(reg, m.array(), white, 0.95 * o)
         else:
             m.clear()
-            lid = np.array([[ec[0] - r * 1.25, ec[1] - r * 0.1], [ec[0], ec[1] + r * 0.5],
-                            [ec[0] + r * 1.25, ec[1] - r * 0.15]])
-            Stroke(lid, 1.7 * self.u, rng, pool=0.25).draw(m, 10)
+            lid = np.array([[ec[0] - r * 1.3, ec[1] - r * 0.1], [ec[0], ec[1] + r * 0.5],
+                            [ec[0] + r * 1.3, ec[1] - r * 0.15]])
+            Stroke(lid, 1.8 * self.u, rng, pool=0.25).draw(m, 10)
             self._over(reg, m.array(), ink, 0.92)
         return reg, np.clip(cover * 1.4, 0, 1)
 
     def eye_screen(self, t):
-        """Posición del ojo en coordenadas de pantalla (para la posta del rojo)."""
+        """Posición del ojo (pupila) en coordenadas de pantalla."""
         x0, y0 = self.bbox[:2]
         p = self.to_screen(self.head_tf(t)([EYE]))[0]
         return np.array([p[0] + x0, p[1] + y0])

@@ -62,7 +62,7 @@ def make_kraft(w, h, seed=7, lift_n=0):
     specks = cv2.GaussianBlur(specks, (0, 0), 0.7)
     # Motas que se levantarán: algo más grandes y oscuras, repartidas por toda la hoja.
     lifters = np.stack([rng.uniform(40, w - 40, lift_n), rng.uniform(40, h - 40, lift_n),
-                        rng.uniform(1.1, 2.2, lift_n), rng.uniform(0.55, 0.9, lift_n)], 1) if lift_n else np.zeros((0, 4))
+                        rng.uniform(1.2, 2.5, lift_n), rng.uniform(0.6, 0.95, lift_n)], 1) if lift_n else np.zeros((0, 4))
 
     # Micro-textura fibrosa: ruido estirado en direcciones aleatorias (fieltro de celulosa).
     felt = np.zeros((h, w), np.float32)

@@ -110,29 +110,32 @@ def build(W, H, paper_height, seed=11, lay=None):
                        strength=0.26, layers=22, max_seg=30, var_fn=ridge_var, base_var=0.2, layer_var=0.4,
                        softness=0.95, flat=0.15, edge_dark=0.1, grade=(my, box[3] + 20 * sy, 0.5, 1.0),
                        mask=V, pooling=0.45, soft_blur=3 * sx))
-    # 6. Hilera de árboles (cerco vivo) entre la neblina y el potrero: copas sueltas, algunos álamos
+    # 6. Cercos vivos: 3 filas de árboles (atrás más chicos y claros), tamaños ±40 %, algunos álamos
     trees = []
-    x = box[0] + 60 * sx
     xend = tx - hw * 0.9
-    while x < xend:
-        poplar = rng.random() < 0.22
-        if poplar:
-            rx, ry = rng.uniform(7, 10) * sx, rng.uniform(38, 58) * sy
-        else:
-            rx, ry = rng.uniform(14, 30) * sx, rng.uniform(14, 26) * sy
-        base_y = my - 2 * sy + rng.normal(0, 2) * sy
-        cy = base_y - ry * 0.95
-        a = np.linspace(0, 2 * np.pi, 22, endpoint=False)
-        pts = np.stack([x + rx * np.cos(a), cy + ry * np.sin(a)], 1)
-        pts[:, 1] = np.minimum(pts[:, 1], base_y)
-        tone = rng.uniform(0.3, 0.62)
-        layers.append(wash(pts, "#4a4636", shape, paper_height, rng, strength=tone, layers=10, base_depth=3,
-                           base_var=0.3 if not poplar else 0.12, layer_depth=2, layer_var=0.4,
-                           edge_dark=0.35, softness=0.75, flat=0.35, granulation=0.5, texture=0.35,
-                           grade=(cy - ry, base_y + 4 * sy, 0.45, 1.0), mask=V, margin=12))
-        trees.append((x, base_y, rx, ry, poplar))
-        gap = rng.uniform(-0.4, 1.4) if rng.random() < 0.8 else rng.uniform(2.5, 5)
-        x += rx * (1.2 + gap)
+    for row, (dy, scale, tone0, n_gap) in enumerate([(-16, 0.6, 0.16, 2.2), (-6, 0.8, 0.26, 1.5), (4, 1.0, 0.42, 1.3)]):
+        x = box[0] + rng.uniform(30, 90) * sx
+        while x < xend:
+            poplar = rng.random() < (0.08 if row < 2 else 0.2)
+            k = scale * rng.uniform(0.6, 1.4)
+            if poplar:
+                rx, ry = rng.uniform(7, 10) * sx * k, rng.uniform(40, 60) * sy * k
+            else:
+                rx, ry = rng.uniform(15, 30) * sx * k, rng.uniform(14, 26) * sy * k
+            base_y = my + dy * sy + rng.normal(0, 2) * sy
+            cy = base_y - ry * 0.95
+            a = np.linspace(0, 2 * np.pi, 22, endpoint=False)
+            pts = np.stack([x + rx * np.cos(a), cy + ry * np.sin(a)], 1)
+            pts[:, 1] = np.minimum(pts[:, 1], base_y)
+            tone = tone0 * rng.uniform(0.75, 1.3)
+            layers.append(wash(pts, "#4a4636", shape, paper_height, rng, strength=tone, layers=10, base_depth=3,
+                               base_var=0.32 if not poplar else 0.12, layer_depth=2, layer_var=0.45,
+                               edge_dark=0.3, softness=0.8, flat=0.3, granulation=0.75, texture=0.55,
+                               dry=0.8, grade=(cy - ry, base_y + 4 * sy, 0.45, 1.0), mask=V, margin=12))
+            if row == 2:
+                trees.append((x, base_y, rx, ry, poplar))
+            gap = rng.uniform(-0.5, n_gap) if rng.random() < 0.85 else rng.uniform(2.0, 4.5)
+            x += rx * (1.1 + gap)
     geo["trees"] = trees
     return layers, geo
 
@@ -195,20 +198,35 @@ def ink_strokes(geo, W, H, seed=21, avoid=None):
                           smooth=False))
         out.append(Stroke([(px, py), (px, py + 5 * u)], 0.8 * u, rng, pool=0.1, smooth=False))
 
-    # Matas de pasto: más densas y grandes adelante
+    # Pasto: matas de distinto tamaño, briznas sueltas, espigas; más denso y grande adelante
     box = geo["box"]
     my = geo["meadow_top"]
-    for k in range(260):
-        yy = my + (box[3] - my) * rng.random() ** 0.8
+    for k in range(300):
+        yy = my + (box[3] - my) * rng.random() ** 0.75
         xx = rng.uniform(box[0] + 40 * u, box[2] - 40 * u)
         if avoid(xx, yy):
             continue
         depth = (yy - my) / max(1.0, box[3] - my)
-        hgt = (4 + 10 * depth) * u * rng.uniform(0.7, 1.3)
-        n = rng.integers(2, 5)
+        kind = rng.random()
+        hgt = (3 + 11 * depth) * u * rng.uniform(0.5, 1.6)
+        if kind < 0.25:          # brizna suelta
+            n = 1
+        elif kind < 0.85:        # mata
+            n = int(rng.integers(2, 6))
+        else:                    # mata con espiga
+            n = int(rng.integers(3, 7))
+        dirn = rng.normal(0.2, 0.45)
         for j in range(n):
-            lean = rng.normal(0.25, 0.35) * hgt
-            bx = xx + rng.normal(0, 2.5) * u
-            out.append(Stroke([(bx, yy), (bx + lean * 0.4, yy - hgt * 0.55), (bx + lean, yy - hgt)],
-                              (0.7 + 0.6 * depth) * u, rng, taper=(0.02, 0.8), pool=0.1))
+            lean = (dirn + rng.normal(0, 0.3)) * hgt
+            hh = hgt * rng.uniform(0.6, 1.15)
+            bx = xx + rng.normal(0, 2.0 + 2.5 * depth) * u
+            out.append(Stroke([(bx, yy), (bx + lean * 0.35, yy - hh * 0.55), (bx + lean, yy - hh)],
+                              (0.55 + 0.7 * depth) * u * rng.uniform(0.8, 1.25), rng, taper=(0.02, 0.85), pool=0.08))
+        if kind >= 0.85:
+            sx_, sy_ = xx + dirn * hgt * 1.1, yy - hgt * 1.25
+            out.append(Stroke([(xx, yy), (sx_, sy_)], 0.6 * u, rng, taper=(0.05, 0.3), pool=0.05))
+            for j in range(4):
+                out.append(Stroke([(sx_ + rng.normal(0, 1.2) * u, sy_ + j * 1.8 * u),
+                                   (sx_ + rng.normal(0, 1.2) * u + 1.5 * u, sy_ + j * 1.8 * u - 1.2 * u)],
+                                  0.9 * u, rng, taper=(0.1, 0.2), pool=0.3))
     return out

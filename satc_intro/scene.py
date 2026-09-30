@@ -1,10 +1,14 @@
 """La lámina completa y su línea de tiempo (5 s, 30 fps).
 
-Acto I   (0,00–1,20) La vigía y la torre: la torre se traza con regla; el queltehue despierta.
-Acto II  (1,20–3,30) El murmullo y el clic: las motas forman el indicio; ALERTA sale del ojo y todo
-                     encaja en registro en el mismo cuadro, con abolladura del papel.
-Acto III (3,30–5,00) La suelta y la posta: cada letra es un queltehue que se posa en el potrero; el
-                     rojo se junta en el ojo de la vigía de turno; el queltehue cierra el suyo.
+Acto I   (0,00–0,90) La vigía y la torre: la torre se traza con regla; el queltehue despierta y abre
+                     el ojo: el primer rojo.
+Acto II  (0,90–3,00) El murmullo y el clic: las motas del kraft se despegan y forman las palabras como
+                     puntillado; el queltehue grita y ALERTA sale de su pupila letra por letra; en el
+                     clic (2,0 s) todo se imprime en registro y el papel se hunde (queda la marca de
+                     plancha). El título queda quieto 1 s.
+Acto III (3,00–5,00) La suelta y la posta: onda circular desde el ojo; cada letra se abre como alas y
+                     es un queltehue que baja al potrero; el rojo de ALERTA escurre hasta el ojo de la
+                     vigía de turno; las demás duermen; el queltehue cierra el suyo; nota final.
 """
 import cv2
 import numpy as np
@@ -12,8 +16,8 @@ import numpy as np
 from . import landscape
 from .color import lin, linear_to_srgb, PALETTE
 from .flock import Flock
-from .ink import Mask, Stroke
-from .murmur import Murmur
+from .ink import Mask
+from .murmur import Murmur, blue_noise_in_mask
 from .noise import fbm, smoothstep
 from .paper import make_kraft
 from .plate import Plate
@@ -25,16 +29,16 @@ from .typography import Font, Word
 FPS = 30
 DURATION = 5.0
 
-T = dict(tower=(0.20, 1.00), legend2=0.95, alert=0.95, eye=1.08, lift=(1.10, 1.38), ghost=1.45,
-         alerta=1.80, click=2.10, release=3.30, sleep=4.12, note=(4.10, 4.42))
+T = dict(tower=(0.10, 0.72), legend2=0.62, alert=0.70, eye=0.80, lift=(0.86, 1.12), shout=(1.40, 1.62),
+         click=2.00, release=3.00, relay=3.16, sleep=4.18, note=(4.18, 4.48))
 
 
 def layout(W, H):
     """Maquetación. 16:9 (escritorio) o 4:5 (móvil)."""
     if W / H > 1.2:
         u = W / 1920.0
-        s = lambda x, y: (x * u, y * H / 1080.0)
         v = H / 1080.0
+        s = lambda x, y: (x * u, y * v)
         return dict(
             u=u, frame=26 * u, margin=60 * u, head_base=66 * v, head_rule=84 * v, head_cap=13.5 * u,
             foot_rule=958 * v, foot_l1=990 * v, foot_l2=1022 * v, foot_cap=13.5 * u,
@@ -43,11 +47,10 @@ def layout(W, H):
             num1=s(186, 900), num2=s(1616, 322), huellas=s(840, 982), no_confundir=s(1232, 982),
             map_x=1824 * u, map_top=136 * v, map_bottom=430 * v,
             title_cx=1075 * u, title_w=560 * u, title_top=150 * v, title_gap=14 * v, title_small_cap=40 * v,
-            land_box=(700 * u, 800 * v, 1700 * u, 938 * v), land_h=(24 * v, 46 * v),
-            duty_pt=s(1210, 925), merge_pt=s(1150, 520),
+            land_box=(700 * u, 800 * v, 1700 * u, 938 * v), land_h=(26 * v, 42 * v),
+            duty_pt=s(800, 934), duty_h=98 * v,
             note_cx=1075 * u, note_y=(300 * v, 352 * v), note_cap=26 * u,
         )
-    # 4:5 vertical
     u = W / 1080.0
     v = H / 1350.0
     s = lambda x, y: (x * u, y * v)
@@ -61,8 +64,8 @@ def layout(W, H):
         num1=s(66, 1180), num2=s(924, 612), huellas=s(560, 1264), no_confundir=s(800, 1264),
         map_x=1000 * u, map_top=120 * v, map_bottom=380 * v,
         title_cx=470 * u, title_w=640 * u, title_top=122 * v, title_gap=14 * v, title_small_cap=44 * v,
-        land_box=(420 * u, 1020 * v, 1000 * u, 1215 * v), land_h=(24 * v, 44 * v),
-        duty_pt=s(730, 1190), merge_pt=s(600, 760),
+        land_box=(420 * u, 1020 * v, 1000 * u, 1215 * v), land_h=(26 * v, 42 * v),
+        duty_pt=s(612, 1212), duty_h=92 * v,
         note_cx=500 * u, note_y=(330 * v, 380 * v), note_cap=26 * u,
     )
 
@@ -76,10 +79,11 @@ class Scene:
         self.fonts = dict(anton=Font("Anton-Regular.ttf"), rm=Font("IMFellEnglish-Roman.ttf"),
                           it=Font("IMFellEnglish-Italic.ttf"), sc=Font("IMFellEnglish-SC.ttf"))
         self.col = dict(ink=lin("#221a14"), sepia_ink=lin("#2c2118"), white=lin("#f4ead0"),
-                        red=lin(PALETTE["alerta"]), grey=lin("#8f8a80"), speck=lin("#3b2c1f"))
+                        red=lin(PALETTE["alerta"]), red_dark=lin("#a8311c"), grey=lin("#7a7163"),
+                        speck=lin("#2e2218"), hole=lin("#dfc9a2"))
 
         # --- papel y paisaje -------------------------------------------------------------------------
-        paper, ph, lifters = make_kraft(W, H, seed=seed, lift_n=int(260 * (W * H) / (1920 * 1080)))
+        paper, ph, cand = make_kraft(W, H, seed=seed, lift_n=int(4200 * (W * H) / (1920 * 1080)))
         self.paper, self.ph = paper, ph
         layers, geo = landscape.build(W, H, ph, seed=seed + 4, lay=dict(
             plate_box=L["plate_box"], horizon=L["horizon"], tower_base=L["tower_base"], meadow_top=L["meadow_top"],
@@ -91,7 +95,7 @@ class Scene:
 
         # --- queltehue (reserva: pintado sobre papel limpio) ---------------------------------------
         self.q = Queltehue(L["bird_feet"], L["bird_size"], seed=seed + 1, t_alert=T["alert"], t_eye=T["eye"],
-                           t_sleep=T["sleep"])
+                           t_shout=T["shout"][0], t_shout_end=T["shout"][1], t_sleep=T["sleep"])
         qx0, qy0, qx1, qy1 = self.q.bbox
 
         def avoid(x, y):
@@ -100,7 +104,11 @@ class Scene:
         m = Mask(W, H)
         for st in landscape.ink_strokes(geo, W, H, seed=seed + 9, avoid=avoid):
             st.draw(m, 10.0)
-        self._over(canvas, self._rough(m.array(), rng), self.col["sepia_ink"], 0.88)
+        self.gx, self.gy = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32))
+        r2 = np.random.default_rng(seed + 50)
+        self.rough_dx = (fbm((H, W), 8, r2, octaves=3) - 0.5) * 1.6
+        self.rough_dy = (fbm((H, W), 8, r2, octaves=3) - 0.5) * 1.6
+        self._over(canvas, self._rough(m.array()), self.col["sepia_ink"], 0.88)
         body_rgb, body_a = self.q.body_sprite(paper, ph, self.col["ink"], self.col["white"])
         reg = canvas[qy0:qy1, qx0:qx1]
         reg *= (1 - body_a[..., None])
@@ -115,44 +123,81 @@ class Scene:
 
         # --- elementos animados ---------------------------------------------------------------------------
         self.tower = Tower(L["tower_base"], L["tower_h"], scale=u, t0=T["tower"][0], t1=T["tower"][1])
-        self.title = Title(L, self.fonts["anton"], self.q.eye_screen, rng, t_ghost=T["ghost"],
-                           t_click=T["click"], t_alerta=T["alerta"])
-        # objetivos del murmullo: puntos dentro de las palabras en tinta
-        m.clear()
-        for w in self.title.words:
-            if w.color == "ink":
-                for Lt in w.letters:
-                    Lt.draw(m.ctx)
-        m.set_alpha(1.0)
-        m.ctx.fill()
-        ys, xs = np.nonzero(m.array() > 0.6)
-        targets = np.stack([xs, ys], 1)
+        self.title = Title(L, self.fonts["anton"], self.q.eye_screen, rng, t_click=T["click"])
         blk = self.title.block
-        self.murmur = Murmur(lifters, targets, rng, center=np.array([(blk[0] + blk[2]) / 2, (blk[1] + blk[3]) / 2]),
-                             u=u, t_lift=T["lift"])
-        head = self.q.eye_screen(T["release"])
-        self.flock = Flock(self.title, L, rng, t_release=T["release"], queltehue_head=head)
+        # puntillado: puntos con distancia mínima dentro de cada palabra en tinta
+        targets = []
+        for w in self.title.words:
+            if w.color != "ink":
+                continue
+            m.clear()
+            for Lt in w.letters:
+                Lt.draw(m.ctx)
+            m.set_alpha(1.0)
+            m.ctx.fill()
+            area = (m.array() > 0.6)
+            n_w = int(np.clip(area.sum() / (24.0 * u * u), 220, 640))
+            # el contorno define la letra: ~60 % de los puntos en el borde, el resto adentro
+            er = cv2.erode(area.astype(np.uint8), np.ones((5, 5), np.uint8), iterations=max(1, int(round(u)))) > 0
+            edge = area & ~er
+            n_e = int(n_w * 0.68)
+            pe = blue_noise_in_mask(edge, n_e, rng, max(2.4 * u, np.sqrt(edge.sum() / max(1, n_e)) * 0.8))
+            pi = blue_noise_in_mask(er, n_w - len(pe), rng, max(3.2 * u, np.sqrt(er.sum() / max(1, n_w - n_e)) * 0.75))
+            targets.append(np.vstack([pe, pi]) if len(pi) else pe)
+        targets = np.vstack(targets)
+        # motas de origen: visibles desde el cuadro 0, fuera del título y del queltehue, más en el cielo
+        x0b, y0b, x1b, y1b = blk
+        ok = []
+        for (x, y, r, d) in cand:
+            if qx0 < x < qx1 and qy0 < y < qy1:
+                continue
+            if y > L["plate_box"][3] - 10 * u or y < L["head_rule"] + 10 * u:
+                continue
+            if y > L["meadow_top"] and rng.random() < 0.75:
+                continue
+            ok.append((x, y, r, d))
+        ok = np.array(ok)
+        rng.shuffle(ok)
+        sources = ok[:len(targets)]
+        targets = targets[:len(sources)]
+        self.murmur = Murmur(sources, targets, rng, center=np.array([(x0b + x1b) / 2, (y0b + y1b) / 2]), u=u,
+                             t_lift=T["lift"], t_print=T["click"] - 2.0 / FPS)
+        eye_rel = self.q.eye_screen(T["release"])
+        self.flock = Flock(self.title, L, rng, t_release=T["release"], eye=eye_rel, relay_t0=T["relay"])
 
-        # --- texturas fijas al papel (el grano no se mueve con las planchas) ----------------------------
-        r2 = np.random.default_rng(seed + 50)
+        # --- grano fijo al papel, distinto en cada plancha --------------------------------------------------
         fine = fbm((H, W), 1.6, r2, octaves=2)
         self.g_ink = (0.55 + 0.45 * smoothstep(0.18, 0.42, 0.65 * fine + 0.35 * ph)).astype(np.float32)
         self.g_ink = np.clip(self.g_ink * (0.93 + 0.1 * fbm((H, W), 40, r2, octaves=2)), 0, 1)
-        self.g_white = smoothstep(0.16, 0.5, 0.5 * fbm((H, W), 1.4, r2, octaves=2) + 0.5 * ph).astype(np.float32)
-        self.g_white = 0.35 + 0.65 * self.g_white
-        # abolladura del papel: campo de altura bajo el bloque del título
+        coarse = fbm((H, W), 2.6, r2, octaves=2)
+        self.g_red = (0.62 + 0.38 * smoothstep(0.22, 0.5, 0.7 * coarse + 0.3 * ph)).astype(np.float32)
+        self.g_red = np.clip(self.g_red * (0.88 + 0.16 * fbm((H, W), 70, r2, octaves=2)), 0, 1)
+        self.g_white = (0.35 + 0.65 * smoothstep(0.16, 0.5, 0.5 * fbm((H, W), 1.4, r2, octaves=2) + 0.5 * ph))
+        self.g_white = self.g_white.astype(np.float32)
+
+        # --- golpe de prensa: hundimiento amplio + marca de plancha que queda -------------------------------
         bx0, by0, bx1, by1 = [int(v) for v in blk]
-        dent = np.zeros((H, W), np.float32)
-        cv2.rectangle(dent, (bx0 - int(10 * u), by0 - int(10 * u)), (bx1 + int(10 * u), by1 + int(10 * u)), 1.0, -1)
-        dent = cv2.GaussianBlur(dent, (0, 0), 38 * u)
-        self.dent_gx = cv2.Sobel(dent, cv2.CV_32F, 1, 0, ksize=5) / 32.0
-        self.dent_gy = cv2.Sobel(dent, cv2.CV_32F, 0, 1, ksize=5) / 32.0
-        self.gx, self.gy = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32))
-        self.rough_dx = (fbm((H, W), 8, r2, octaves=3) - 0.5) * 1.6
-        self.rough_dy = (fbm((H, W), 8, r2, octaves=3) - 0.5) * 1.6
+        pad = int(26 * u)
+        rect = np.zeros((H, W), np.float32)
+        cv2.rectangle(rect, (bx0 - pad, by0 - pad), (bx1 + pad, by1 + pad), 1.0, -1)
+        broad = cv2.GaussianBlur(rect, (0, 0), 55 * u)
+        mark = cv2.GaussianBlur(rect, (0, 0), 3.0 * u)
+        bgx = cv2.Sobel(broad, cv2.CV_32F, 1, 0, ksize=5)
+        bgy = cv2.Sobel(broad, cv2.CV_32F, 0, 1, ksize=5)
+        mgx = cv2.Sobel(mark, cv2.CV_32F, 1, 0, ksize=5)
+        mgy = cv2.Sobel(mark, cv2.CV_32F, 0, 1, ksize=5)
+        lx, ly = -0.55, -0.83
+        sb = bgx * lx + bgy * ly
+        sm = mgx * lx + mgy * ly
+        self.dent_shade = (sb / (np.abs(sb).max() + 1e-6)).astype(np.float32)
+        self.mark_shade = (sm / (np.abs(sm).max() + 1e-6)).astype(np.float32)
+        gm = np.hypot(bgx, bgy).max() + 1e-6
+        self.dent_dx = (bgx / gm).astype(np.float32)
+        self.dent_dy = (bgy / gm).astype(np.float32)
 
         self.masks = {k: Mask(W, H) for k in ("ink", "white", "ink_plate", "red", "grey", "red_over",
-                                              "white_over", "speck", "shadow", "tower", "note")}
+                                              "white_over", "speck", "shadow", "holes", "tower", "note",
+                                              "relay", "glint")}
 
     # --- utilidades de composición -------------------------------------------------------------------
     @staticmethod
@@ -165,19 +210,12 @@ class Scene:
     def _glaze(canvas, a, col, k):
         canvas *= np.exp(a[..., None] * k * np.log(np.clip(col, 0.01, 1))[None, None, :])
 
-    def _rough(self, a, rng=None):
-        if not hasattr(self, "rough_dx"):
-            H, W = a.shape
-            r = np.random.default_rng(3)
-            self.gx, self.gy = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32))
-            self.rough_dx = (fbm((H, W), 8, r, octaves=3) - 0.5) * 1.6
-            self.rough_dy = (fbm((H, W), 8, r, octaves=3) - 0.5) * 1.6
+    def _rough(self, a):
         return cv2.remap(a, self.gx + self.rough_dx, self.gy + self.rough_dy, cv2.INTER_LINEAR)
 
     # --- cuadro -------------------------------------------------------------------------------------------
     def frame(self, t):
-        W, H, L = self.W, self.H, self.L
-        u = L["u"]
+        L = self.L
         t2 = np.floor(t * FPS / 2) * 2 / FPS      # capas dibujadas: «en dos»
         img = self.base.copy()
         M = self.masks
@@ -189,7 +227,7 @@ class Scene:
         self.plate.draw_legend2(M["tower"], t, T["legend2"])
         self._over(img, M["tower"].array(), self.col["ink"], 0.95)
 
-        # La vigía: cabeza, cuello, cresta y ojo
+        # La vigía: cabeza, cuello, cresta, pico y ojo
         q = self.q
         hr, ha = q.head_sprite(t, self.paper, self.col["ink"], self.col["white"], self.col["red"])
         x0, y0, x1, y1 = q.bbox
@@ -197,53 +235,56 @@ class Scene:
         reg *= (1 - ha[..., None])
         reg += hr * ha[..., None]
 
-        # II. El murmullo: motas del kraft (las que aún no se levantan también se dibujan aquí)
+        # II. El murmullo: motas del kraft, huecos claros, puntillado
         self.murmur.draw(M, t)
+        self._over(img, M["holes"].array(), self.col["hole"], 0.8)
         self._over(img, cv2.GaussianBlur(M["shadow"].array(), (0, 0), 1.2), lin("#6d5a40"), 0.8)
-        self._over(img, M["speck"].array(), self.col["speck"], 0.9)
+        self._over(img, M["speck"].array(), self.col["speck"], 0.95)
 
-        # El título: plancha blanca -> tinta -> rojo (tintas que se superponen, no canales RGB)
+        # El título: base blanca (solo bajo el rojo, en registro) -> plancha roja -> plancha negra
         tm = {"white": M["white"], "ink": M["ink_plate"], "red": M["red"]}
         self.title.draw(tm, t)
         a_w = M["white"].array()
         if a_w.any():
-            self._over(img, a_w * self.g_white, self.col["white"], 0.94)
+            self._over(img, a_w * self.g_white, self.col["white"], 0.9)
+        a_r = M["red"].array()
+        if a_r.any():
+            self._glaze(img, a_r * self.g_red, self.col["red"], 1.0)
         a_i = M["ink_plate"].array()
         if a_i.any():
             self._glaze(img, a_i * self.g_ink, self.col["ink"], 1.35)
-        a_r = M["red"].array()
-        if a_r.any():
-            self._glaze(img, a_r * self.g_ink, self.col["red"], 1.0)
 
-        # III. La bandada y la posta del rojo
+        # III. La bandada, la posta del rojo y la vigía de turno
         fm = {"ink": M["ink"], "white": M["white_over"], "grey": M["grey"], "red_over": M["red_over"],
-              "white_over": M["white_over"]}
-        M["white_over"].clear()
+              "white_over": M["white_over"], "relay": M["relay"], "glint": M["glint"]}
         self.flock.draw(fm, t)
-        self._over(img, M["grey"].array(), lin("#7a7163"), 0.97)
+        self._over(img, M["grey"].array(), self.col["grey"], 0.97)
         self._over(img, M["white_over"].array() * (0.8 + 0.2 * self.g_white), self.col["white"], 0.95)
         self._over(img, M["ink"].array(), self.col["ink"], 0.95)
+        a_rel = M["relay"].array()
+        if a_rel.any():
+            a_rel = self._rough(a_rel)
+            rim = np.clip(a_rel - cv2.GaussianBlur(a_rel, (0, 0), 1.6 * L["u"]), 0, 1)
+            self._over(img, a_rel * (0.85 + 0.15 * self.g_red), self.col["red"], 0.96)
+            self._over(img, rim * 2.0, self.col["red_dark"], 0.55)
         self._over(img, M["red_over"].array(), self.col["red"], 1.0)
-        if t >= self.flock.t_eye + 0.05:
-            e, r = self.flock.duty_eye()
-            M["white_over"].clear()
-            M["white_over"].dot(e[0] - r * 0.4, e[1] - r * 0.45, max(0.6, r * 0.38), 1.0)
-            self._over(img, M["white_over"].array(), self.col["white"], 0.9)
+        self._over(img, M["glint"].array(), self.col["white"], 0.95)
 
         # Nota de comportamiento (voz de guía de campo)
         self._note(img, t)
 
-        # Abolladura del papel en el clic
-        dt = t - T["click"]
-        if 0 <= dt < 0.45:
-            amp = np.exp(-dt / 0.14) * np.cos(dt * 2 * np.pi / 0.3)
-            k = np.float32(5.5 * amp)
-            shade = 1.0 + k * (self.dent_gx * -0.55 + self.dent_gy * -0.85)
-            img *= np.clip(shade, 0.93, 1.07)[..., None]
-            d = np.float32(220.0 * u * amp)
-            img = cv2.remap(img, (self.gx + self.dent_gx * d).astype(np.float32),
-                            (self.gy + self.dent_gy * d).astype(np.float32), cv2.INTER_LINEAR,
-                            borderMode=cv2.BORDER_REFLECT)
+        # Golpe de prensa en el clic: 4 cuadros de hundimiento; queda la marca de plancha
+        f = int(np.floor((t - T["click"]) * FPS + 1e-6))
+        if f >= 0:
+            amp = {0: 1.0, 1: 0.72, 2: 0.42, 3: 0.18}.get(f, 0.0)
+            mark = 0.035 if f > 3 else 0.035 + 0.045 * amp
+            shade = 1.0 + np.float32(0.08 * amp) * self.dent_shade + np.float32(mark) * self.mark_shade
+            img *= shade[..., None]
+            if amp > 0:
+                d = np.float32(7.0 * L["u"] * amp)
+                img = cv2.remap(img, (self.gx - self.dent_dx * d).astype(np.float32),
+                                (self.gy - self.dent_dy * d).astype(np.float32), cv2.INTER_LINEAR,
+                                borderMode=cv2.BORDER_REFLECT)
         return img
 
     def _note(self, img, t):
@@ -271,9 +312,8 @@ class Scene:
         m.set_alpha(1.0)
         m.ctx.fill()
         a = m.array()
-        # se escribe de izquierda a derecha, línea por línea, con el borde de la pluma suave
         u = np.clip((t - t0) / (t1 - t0), 0, 1)
-        xL = L["note_cx"] - (wa + wb) / 2
+        xL = x
         span = wa + wb
         H, W = a.shape
         xs = self.gx[0]

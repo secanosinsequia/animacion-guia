@@ -22,11 +22,12 @@ def _rigid(ctx, cx, cy, dx, dy, rot, sx=1.0, sy=None):
 
 
 class Title:
-    def __init__(self, lay, font, eye_fn, rng, t_ghost=1.45, t_click=2.10, t_alerta=1.80):
+    def __init__(self, lay, font, eye_fn, rng, t_click=2.00, flight=0.40):
         self.lay = lay
         self.font = font
         self.eye_fn = eye_fn          # t -> posición del ojo en pantalla
-        self.t_ghost, self.t_click, self.t_alerta = t_ghost, t_click, t_alerta
+        self.t_click = t_click
+        self.flight = flight           # cada letra de ALERTA vuela 12 cuadros
         cx = lay["title_cx"]
         width = lay["title_w"]
         y = lay["title_top"]
@@ -42,7 +43,6 @@ class Title:
         caps[0] = min(caps[0], lay.get("title_small_cap", 999))
         for (text, color, trk), cap in zip(specs, caps):
             if text == "SISTEMA DE":
-                # la línea chica se ajusta con espaciado para calzar el ancho
                 probe = Word(text, font, cap, 0, 0, 0.0, "left")
                 n = len(text) - 1
                 trk = (width - probe.width) / max(1, n) / (cap * font.upm / font.cap)
@@ -55,15 +55,10 @@ class Title:
         self.alerta = words[1]
         self.block = (min(w.box[0] for w in words), min(w.box[1] for w in words),
                       max(w.box[2] for w in words), max(w.box[3] for w in words))
-        # Descuadre de cada plancha (rígida) por palabra
-        self.off = {}
-        for i, w in enumerate(words):
-            for plate in ("white", "ink"):
-                ang = rng.uniform(0, 2 * np.pi)
-                mag = rng.uniform(6, 12) * lay["u"]
-                self.off[(i, plate)] = (np.cos(ang) * mag, np.sin(ang) * mag, np.deg2rad(rng.uniform(-1.3, 1.3)))
-        self.tremble_seed = rng.integers(1 << 30)
-        # Letras en orden (para la suelta del acto III)
+        # Desregistro riso: plancha negra y plancha roja en sentidos opuestos (±3–4 px)
+        u = lay["u"]
+        ang = rng.uniform(0, 2 * np.pi)
+        self.mis = np.array([np.cos(ang), np.sin(ang)]) * 3.6 * u
         self.letters = []
         for i, w in enumerate(words):
             for L in w.letters:
@@ -71,122 +66,132 @@ class Title:
                 L.color = w.color
                 self.letters.append(L)
         self.pop_time = {}  # id(letter) -> tiempo en que se vuelve pájaro
+        # ALERTA sale del ojo letra por letra (1 cuadro de desfase); la última llega en el clic
+        nA = len(self.alerta.letters)
+        self.depart = [t_click - flight - (nA - 1 - k) / FPS for k in range(nA)]
 
     # --- estados ------------------------------------------------------------------------------------
-    def ghost_alpha(self, i, t):
-        """Opacidad del indicio para la palabra i (llega a medida que llegan las motas)."""
-        t0 = self.t_ghost + 0.07 * [0, 0, 1, 2][i]
-        u = np.clip((t - t0) / 0.35, 0, 1)
-        return 0.78 * u * u * (3 - 2 * u)
-
-    def tremble(self, i, plate, t):
-        """Temblor «en dos»: cambia cada 2 cuadros, sin interpolar."""
-        step = int(np.floor(t * FPS / 2))
-        r = np.random.default_rng((self.tremble_seed + step * 131 + i * 17 + (plate == "ink") * 7) % (1 << 31))
-        return r.normal(0, 1.4, 2) * self.lay["u"], np.deg2rad(r.normal(0, 0.25))
-
     def click_scale(self, t):
         f = int(np.round((t - self.t_click) * FPS))
-        return {-2: 0.985, -1: 0.975, 0: 1.045, 1: 0.985, 2: 1.008}.get(f, 1.0)
+        return {0: 1.045, 1: 0.985, 2: 1.008}.get(f, 1.0)
 
-    def alerta_flight(self, t):
-        """ALERTA sale del ojo: posición del centro, escala y avance (0..1)."""
-        t0, t1 = self.t_alerta, self.t_click
-        u = np.clip((t - t0) / (t1 - t0), 0, 1)
-        e = u * u * (3 - 2 * u)
-        e = 1 - (1 - u) ** 2.6
+    def plate_offset(self, t, plate):
+        """Desregistro que salta cada cuadro en los 2 cuadros previos al clic; luego, registro exacto."""
+        f = int(np.floor((t - self.t_click) * FPS + 1e-6))
+        if f >= 0:
+            return np.zeros(2)
+        sign = 1 if plate == "ink" else -1
+        jump = {-2: np.array([1.0, 0.35]), -1: np.array([-0.55, 1.0])}.get(f, np.array([1.0, 0.35]))
+        R = np.array([[self.mis[0], -self.mis[1]], [self.mis[1], self.mis[0]]]) / max(1e-6, np.hypot(*self.mis))
+        return sign * (R @ jump) * np.hypot(*self.mis)
+
+    def letter_flight(self, k, t):
+        """Posición del centro, escala y avance de la letra k de ALERTA (sale de la pupila)."""
+        L = self.alerta.letters[k]
+        t0 = self.depart[k]
+        u = np.clip((t - t0) / self.flight, 0, 1)
+        e = 1 - (1 - u) ** 2.4
         p0 = self.eye_fn(t0)
-        p3 = self.alerta.center
-        p1 = p0 + np.array([40, -230]) * self.lay["u"]
-        p2 = p3 + np.array([-260, 40]) * self.lay["u"]
+        p3 = L.center
+        uu = self.lay["u"]
+        p1 = p0 + np.array([30, -200]) * uu
+        p2 = p3 + np.array([-200 + 30 * k, 60]) * uu
         b = ((1 - e) ** 3) * p0 + 3 * e * (1 - e) ** 2 * p1 + 3 * e * e * (1 - e) * p2 + e ** 3 * p3
-        s = 0.04 + 0.96 * e ** 1.4
+        s = 0.06 + 0.94 * e ** 1.3
         return b, s, u
 
     # --- dibujo --------------------------------------------------------------------------------------
-    def _draw_word(self, ctx, w, skip=None, squash=None):
-        for L in w.letters:
-            if skip is not None and skip(L):
-                continue
-            if squash is not None:
-                sq = squash(L)
-                if sq is not None:
-                    sx, sy = sq
-                    ctx.save()
-                    cx, cy = L.center
-                    ctx.translate(cx, cy)
-                    ctx.scale(sx, sy)
-                    ctx.translate(-cx, -cy)
-                    L.draw(ctx)
-                    ctx.restore()
-                    continue
-            L.draw(ctx)
-
     def draw(self, masks, t):
-        """Dibuja las planchas en masks['white'], masks['ink'], masks['red']."""
-        if t < self.t_ghost - 0.01:
-            return
+        """Dibuja las planchas en masks['ink'] (negra), masks['red'] (roja) y masks['white'] (base de la roja)."""
         tc = self.t_click
-        fclick = int(np.round((t - tc) * FPS))
-        clicked = fclick >= 0
-
-        def gone(L):
-            tp = self.pop_time.get(id(L))
-            return tp is not None and t >= tp + 2.0 / FPS
-
-        def squash(L):
-            tp = self.pop_time.get(id(L))
-            if tp is None or t < tp:
-                return None
-            k = int(np.floor((t - tp) * FPS))
-            return {0: (1.10, 0.88), 1: (1.18, 0.78)}.get(k, None)
-
+        f_rel = int(np.floor((t - tc) * FPS + 1e-6))
         sc = self.click_scale(t)
         bcx, bcy = (self.block[0] + self.block[2]) / 2, (self.block[1] + self.block[3]) / 2
-        for i, w in enumerate(self.words):
-            is_alerta = w is self.alerta
-            for plate in ("white", "red" if is_alerta else "ink"):
+
+        def state(L):
+            tp = self.pop_time.get(id(L))
+            if tp is None or t < tp:
+                return "print", None
+            k = int(np.floor((t - tp) * FPS + 1e-6))
+            if k <= 1:
+                return "squash", k
+            return "gone", k
+
+        # plancha negra: las palabras en tinta existen solo como puntos (murmullo) hasta 2 cuadros antes del clic
+        if f_rel >= -2:
+            off = self.plate_offset(t, "ink")
+            ctx = masks["ink"].ctx
+            for w in self.words:
+                if w.color != "ink":
+                    continue
+                for L in w.letters:
+                    st, k = state(L)
+                    if st == "gone":
+                        continue
+                    ctx.save()
+                    ctx.translate(off[0], off[1])
+                    _rigid(ctx, bcx, bcy, 0, 0, 0, sc)
+                    if st == "squash":
+                        bx = (L.box[0] + L.box[2]) / 2
+                        by = L.box[3]
+                        ctx.translate(bx, by)
+                        ctx.scale(1.06, 0.8)
+                        ctx.translate(-bx, -by)
+                    L.draw(ctx)
+                    ctx.restore()
+            masks["ink"].set_alpha(1.0)
+            ctx.fill()
+
+        # plancha roja (con su base blanca en registro exacto): ALERTA sale del ojo
+        off = self.plate_offset(t, "red")
+        for k, L in enumerate(self.alerta.letters):
+            if t < self.depart[k]:
+                continue
+            st, kk = state(L)
+            if st == "gone":
+                continue
+            pos, s, u = self.letter_flight(k, t)
+            for plate in ("white", "red"):
                 ctx = masks[plate].ctx
                 ctx.save()
-                if clicked:
-                    alpha = 1.0
-                    _rigid(ctx, bcx, bcy, 0, 0, 0, sc)
-                elif is_alerta:
-                    if t < self.t_alerta:
-                        ctx.restore()
-                        continue
-                    if plate == "white":  # la base blanca llega recién con el clic
-                        ctx.restore()
-                        continue
-                    pos, s, u = self.alerta_flight(t)
-                    alpha = 1.0
-                    # estela: copias arrastradas (smear), no desenfoque
-                    for lag, a in ((2.0, 0.22), (1.0, 0.42)):
-                        p2, s2, _ = self.alerta_flight(t - lag / FPS / 1.5)
-                        ctx.save()
-                        cx, cy = w.center
-                        ctx.translate(p2[0], p2[1])
-                        ctx.scale(s2, s2)
-                        ctx.translate(-cx, -cy)
-                        self._draw_word(ctx, w)
-                        masks[plate].set_alpha(a)
-                        ctx.fill()
-                        ctx.restore()
-                    cx, cy = w.center
+                if u >= 1:
+                    ctx.translate(off[0], off[1])
+                    if f_rel >= 0:
+                        _rigid(ctx, bcx, bcy, 0, 0, 0, sc)
+                    if st == "squash":
+                        bx = (L.box[0] + L.box[2]) / 2
+                        by = L.box[3]
+                        ctx.translate(bx, by)
+                        ctx.scale(1.06, 0.8)
+                        ctx.translate(-bx, -by)
+                else:
+                    cx, cy = L.center
                     ctx.translate(pos[0], pos[1])
                     ctx.scale(s, s)
                     ctx.translate(-cx, -cy)
-                else:
-                    alpha = self.ghost_alpha(i, t)
-                    if alpha <= 0:
-                        ctx.restore()
-                        continue
-                    dx, dy, rot = self.off[(i, "ink" if plate != "white" else "white")]
-                    boost = 1.35 if fclick in (-2, -1) else 1.0   # anticipación: se separan más
-                    (tx, ty), tr = self.tremble(i, plate, t)
-                    _rigid(ctx, w.center[0], w.center[1], dx * boost + tx, dy * boost + ty, rot * boost + tr,
-                           sc)
-                self._draw_word(ctx, w, skip=gone, squash=squash)
-                masks[plate].set_alpha(alpha)
+                L.draw(ctx)
+                masks[plate].set_alpha(1.0)
                 ctx.fill()
                 ctx.restore()
+            # un único «smear» dibujado: la letra estirada entre el cuadro anterior y el actual
+            if 0 < u < 1:
+                pp, sp, _ = self.letter_flight(k, t - 1.0 / FPS)
+                v = pos - pp
+                sp_len = np.hypot(*v)
+                if sp_len > 6 * self.lay["u"]:
+                    ang = np.arctan2(v[1], v[0])
+                    mid = (pos + pp) / 2
+                    stretch = 1.0 + sp_len / max(8.0, (L.box[3] - L.box[1]) * s)
+                    ctx = masks["red"].ctx
+                    ctx.save()
+                    cx, cy = L.center
+                    ctx.translate(mid[0], mid[1])
+                    ctx.rotate(ang)
+                    ctx.scale(stretch, 0.8)
+                    ctx.rotate(-ang)
+                    ctx.scale((s + sp) / 2, (s + sp) / 2)
+                    ctx.translate(-cx, -cy)
+                    L.draw(ctx)
+                    masks["red"].set_alpha(0.35)
+                    ctx.fill()
+                    ctx.restore()

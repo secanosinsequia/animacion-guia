@@ -122,7 +122,7 @@ def wash(poly, color, canvas_shape, paper_height, rng, *, mode="glaze", strength
          layers=36, base_depth=5, base_var=0.35, layer_depth=3, layer_var=0.45,
          softness=0.55, flat=0.45, edge_dark=0.55, edge_width=2.5, granulation=0.35,
          pooling=0.25, blooms=0, texture=0.35, max_seg=None, var_fn=None,
-         grade=None, soft_blur=0.0, mask=None,
+         grade=None, soft_blur=0.0, mask=None, dry=0.0,
          reveal="bloom", seed_pt=None, sweep_angle=0.0, reveal_noise=0.22,
          t0=0.0, t1=1.0, margin=40, **layer_kw):
     """Crea una capa de acuarela a partir de un polígono base.
@@ -169,6 +169,11 @@ def wash(poly, color, canvas_shape, paper_height, rng, *, mode="glaze", strength
         dens *= 1 - (1 - gmin) * u
     if mask is not None:
         dens *= mask[y0:y1, x0:x1]
+    if dry > 0:
+        # pincel seco: en el borde, el pigmento solo toca las crestas del papel
+        edge_zone = np.clip(1.0 - smoothstep(0.35, 0.8, D), 0, 1) * (D > 0.02)
+        catch = smoothstep(0.42, 0.62, paper_height[y0:y1, x0:x1] + (rng.random(shape) - 0.5) * 0.25)
+        dens *= 1 - dry * edge_zone * (1 - catch)
 
     # Acumulación irregular de pigmento y granulación sobre los valles del papel.
     ph = paper_height[y0:y1, x0:x1]
