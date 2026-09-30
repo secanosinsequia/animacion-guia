@@ -804,9 +804,15 @@ class World:
 
     def _red_link(self, P, head, u_):
         """El camino de la lana que une la etiqueta con la red: nace en el nudo del cordel (donde se anudó la
-        lana de la arpillera), baja por el hueco entre las telas y llega, por encima de la tira, a la «a»."""
+        lana de la arpillera), baja por el hueco entre las telas y se cose al dobladillo de arriba de la tira,
+        cerca de su esquina derecha (por el revés sigue hasta la «a»: no cruza ninguna letra)."""
         if self.knot_x is None:
             return None
+        Ms = self._Ms
+        S = lambda q_: np.asarray(q_, np.float64) @ Ms[:, :2].T + Ms[:, 2]
+        rect = self.L["title"]["rect"]
+        sl, sr = S(np.array([2 * rect[0], 2 * rect[1]])), S(np.array([2 * rect[2], 2 * rect[1]]))
+        head = sl + (sr - sl) * 0.88 + np.array([0.0, 9 * u_])
         xk = float(self.knot_x)
         yk = float(np.interp(xk, self.line_pts[:, 0], self.line_pts[:, 1]))
         kn = np.array([xk, yk]) @ P[:, :2].T + P[:, 2]
@@ -816,9 +822,9 @@ class World:
         gx = right + 16 * u_
         p1 = np.array([gx, kn[1] + 40 * u_])
         p2 = np.array([gx - 4 * u_, bottom + 34 * u_])
-        p3 = np.array([head[0] + 20 * u_, head[1] - 70 * u_])
+        p3 = np.array([head[0] + 10 * u_, head[1] - 40 * u_])
         return catmull_rom(np.array([kn, p1, (p1 + p2) / 2 + np.array([5 * u_, 0]), p2,
-                                     (p2 + p3) / 2 + np.array([0, 16 * u_]), p3, head]), 14)
+                                     (p2 + p3) / 2 + np.array([0, 10 * u_]), p3, head]), 14)
 
     def _end_stitch(self, out, tq, win, cam, k, P=None):
         """La aguja del principio vuelve, ahora con la lana roja, y borda sobre el trazo a lápiz la última
@@ -851,6 +857,8 @@ class World:
             if len(seg_) >= 2:
                 for ch in Yarn(seg_, w * 0.9, WOOL, np.random.default_rng(56), fuzz=0.6).chunks:
                     composite(out, ch, 0.35)
+            if tq >= t_in:
+                composite(out, knot(link[-1], 1.25 * w, "#b01d17", np.random.default_rng(57)), 0.4)
         head, head_d = None, np.array([1.0, 0.0])
         for p_, l_ in zip(pts, L):
             if done <= 0:
@@ -884,7 +892,17 @@ class World:
                     composite(out, ch, 0.35)
                 composite(out, nd, 0.6)
                 return
-            tip = ws + np.array([-66, 18]) * u_
+            rect = self.L["title"]["rect"]
+            sl = S(np.array([2 * rect[0], 2 * rect[1]]))
+            sr = S(np.array([2 * rect[2], 2 * rect[1]]))
+            if ws[0] - sl[0] > 0.2 * (sr[0] - sl[0]):
+                # «Alerta» va a mitad de renglón: la aguja queda clavada en el dobladillo de arriba de la
+                # tira, junto a la «a», con el ojo sobre la pared (no tapa ninguna letra)
+                a0 = pts[0][0]
+                tip = np.array([a0[0] - 26 * u_, sl[1] + (a0[0] - sl[0]) / max(sr[0] - sl[0], 1) * (sr[1] - sl[1])
+                                + 9 * u_])
+            else:
+                tip = ws + np.array([-66, 18]) * u_      # «Alerta» empieza el renglón: en el margen izquierdo
             d_ = _unit2(np.array([-0.42, -0.9]))
             eye = tip + d_ * Ln * 0.95
             nd = needle_sprite(eye, tip, wn, hide_from=0.86, lift=0.8)
