@@ -71,17 +71,18 @@ recuadro **Distribución:** de Arica a Chiloé (mini-mapa).
 
 | Tiempo | Acto | Qué pasa |
 |---|---|---|
-| 0,00–0,90 | **I. La vigía y la torre** | Lámina completa (póster). **La torre se traza sola con regla** (0,10–0,72 s): mástil, celosía, tensores rectos, brazos con anemómetros que giran; aparece su rótulo «2» al pie. El queltehue levanta la cabeza con anticipación y sobreimpulso, eriza la cresta y **abre el ojo: el primer rojo** (0,80 s). |
-| 0,86–2,00 | **II. El murmullo y el clic** | ~1300 **motas del kraft se despegan** (dejan un hueco claro), giran juntas en espiral y forman SISTEMA DE / TEMPRANA / COMUNITARIO **solo como puntillado** que tiembla «en dos». **El queltehue grita** (1,40 s: pico abierto, cabeza adelante) y **ALERTA sale de su pupila** letra por letra en un arco rojo. En los 2 cuadros previos las planchas se desregistran; **en el cuadro 60 (2,00 s) todo se imprime en registro**, con sobreimpulso y **golpe de prensa** (el papel se hunde y queda la marca de plancha). |
-| 2,00–3,00 | **Lectura** | El título queda quieto 1 s (la cresta se mueve con el viento, los anemómetros giran). |
-| 3,00–5,00 | **III. La suelta y la posta** | **Onda desde el ojo** (0,5 s, a lo sumo ~6 letras a la vez): cada letra se aprieta, **se parte por su eje y se abre como alas**, da un aletazo y ya es un queltehue que baja al potrero. **La «A» de ALERTA vuela con su plancha roja riso** (el único pájaro rojo de la bandada); las demás letras rojas sueltan su plancha como papel que sale de la prensa. Al posarse, **la plancha roja de la A se contrae hasta su ojo**: la vigía de turno, en primer plano (≈3,9 s). Las demás duermen (cabeza hundida, en una pata); **el queltehue por fin cierra el suyo** (4,18 s). Se escribe la nota *«Comportamiento: cuando una ve, todas vuelan; duermen por turnos.»* Cuadro final quieto 0,5 s. |
+| 0,00–0,55 | **I. La vigía y la torre** | Lámina completa (póster). El queltehue picotea el pasto. **La torre se traza sola con regla** en 0,4 s (mástil, celosía, tensores rectos, anemómetros que giran) y aparece su rótulo «2» al pie. El queltehue levanta la cabeza con anticipación y sobreimpulso, eriza la cresta y **abre el ojo: el primer rojo**. |
+| 0,55–1,65 | **II. El murmullo y el clic** | ~1300 **motas del kraft se despegan** (dejan un hueco claro), giran juntas en espiral y forman SISTEMA DE / TEMPRANA / COMUNITARIO **como puntillado**, que se densifica «en dos» hasta leerse. **El queltehue grita**: un anillo rojo limpio sale de su pupila y **ALERTA sale de su pico abierto**, letra por letra, por las líneas de voz. En los 2 cuadros previos las planchas se desregistran; **en 1,65 s todo se imprime en registro**, con sobreimpulso y **golpe de prensa**. |
+| 1,65–2,62 | **Lectura** | El título queda quieto ~1 s (la cresta se mueve con el viento y los anemómetros giran). |
+| 2,62–5,00 | **III. La suelta y la posta** | **Onda desde el ojo** (0,45 s; a lo sumo ~6 letras a la vez): cada letra se estremece, **se parte por su eje y se abre como alas**, da un aletazo y ya es un queltehue que baja al potrero. **La «A» de ALERTA vuela con su plancha roja riso** (el único pájaro rojo); al posarse, **la plancha se contrae hasta su ojo**: la vigía de turno. Las demás duermen en grupos; **el queltehue por fin cierra el suyo**. Se escribe la nota *«Comportamiento: cuando una ve, todas vuelan; duermen por turnos.»* y queda **1,1 s de reposo**. |
 
 ## 4. En la web
 
-* Al cargar, la animación **corre sola hasta el título** (actos I–II, cuadros 0–84).
-* **El scroll maneja solo el acto III** y su reversa (cuadros 84–149): al bajar, la alerta se reparte
+* Al cargar, la animación **corre sola hasta el título** (actos I–II, cuadros 0–72).
+* **El scroll maneja solo el acto III** y su reversa (cuadros 72–149): al bajar, la alerta se reparte
   por el territorio; al subir, **la bandada regresa y vuelve a formar el título**.
-* `<h1>` real en HTML (accesible e indexable). Versiones **16:9** (escritorio) y **4:5** (móvil).
+* `<h1>` real en HTML (accesible e indexable). Versiones **16:9** (escritorio), **4:5** y **9:16**
+  (teléfono, pantalla completa).
 
 ## 5. Entregables
 

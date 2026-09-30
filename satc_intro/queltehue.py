@@ -116,7 +116,7 @@ class Queltehue:
         if t < self.t_alert - 0.1:
             a = relaxed
             # forrajea: un picoteo al pasto antes de notar la torre
-            u = (t - 0.22) / 0.30
+            u = (t - (self.t_alert - 0.34)) / 0.24
             if 0 < u < 1:
                 a += np.deg2rad(12) * np.sin(np.pi * u) ** 1.5
         elif t < self.t_alert:  # anticipación: se agacha un poco más
@@ -417,6 +417,12 @@ class Queltehue:
             Stroke(lid, 1.8 * self.u, rng, pool=0.25).draw(m, 10)
             self._over(reg, m.array(), ink, 0.92)
         return reg, np.clip(cover * 1.4, 0, 1)
+
+    def beak_screen(self, t):
+        """Punta del pico (pantalla): de ahí sale el grito, ALERTA."""
+        x0, y0 = self.bbox[:2]
+        p = self.to_screen(self.head_tf(t)([(0.36, -0.742)]))[0]
+        return np.array([p[0] + x0, p[1] + y0])
 
     def eye_screen(self, t):
         """Posición del ojo (pupila) en coordenadas de pantalla."""

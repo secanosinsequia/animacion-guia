@@ -22,6 +22,9 @@ acercamientos) y devolvieron veredicto, puntaje y correcciones concretas.
 | 3 | Rechazado | 8/10 | Ya cuenta la historia completa y «el cierre emociona». **Bloqueante:** el reguero rojo que caía de los pájaros «se lee como sangre», y en una pieza sobre megaproyectos energéticos eso cambia el mensaje. Pidió que la posta fuera sin líquido (la plancha riso de la A viaja y se contrae al ojo) y un ojo de 7–8 px en la vigía de turno. |
 | 4 | **Aprobado** | **8,5/10** | «La posta de la A es el nuevo remate… se lee como impresión que vuelve a registro. La palabra ALERTA termina viva en un solo ojo de guardia. Es la metáfora completa en una imagen, y ahí está el wow.» Se aplicaron sus 4 pulidos opcionales (patas fuera de la plancha roja, mitades al 85 % en Λ, granulación y bordes en las aves chicas, destello de 3 cuadros). |
 
-## Verificador 3 — entrega final
+## Verificador 3 — entrega final (ojos frescos, sin contexto previo)
 
-*(pendiente)*
+| Ronda | Veredicto | Sorpresa | Lo principal |
+|---|---|---|---|
+| 1 | Rechazado | 7/10 | «El concepto es de premio.» Le sorprendieron la lámina como especie viva, el despertar ante la línea de regla, el papel que se vuelve bandada y la posta final. Pidió que ALERTA saliera del pico (sin gotas: se leía como herida), un puntillado legible antes del clic, intermedios limpios (sin rótulas, fantasmas ni iniciales aplastadas), aves con tinta y aguada, un primer segundo más ágil con reposo final ≥ 1,1 s, y una versión 9:16 para teléfono. |
+| 2 | *(en curso)* | | |

@@ -2,26 +2,27 @@
 
 Metamorfosis (por letra, en una onda circular que sale del ojo de la vigía):
   k 0–1  la letra se aprieta (lo dibuja title.py);
-  k 2–4  se parte por su eje y las mitades se abren en V (±14°, 28°, 40° desde la vertical), con un
-         cuerpo y una cabeza que asoman en el vértice — todo en su plancha riso (grano y color);
-  k 5–6  un aletazo: las mitades bajan en Λ;
-  k 7    sustitución seca por el queltehue dibujado, del mismo tamaño y con las alas arriba.
+  k 2–3  se parte por su eje y las mitades se abren en V (20°, 40° desde la vertical), en su plancha
+         riso (grano y color);
+  k 4    un aletazo: las mitades bajan en Λ;
+  k 5    sustitución seca por el queltehue dibujado, del mismo tamaño y con las alas arriba.
 Vuelo: ciclo de 4 poses «en dos» (V, horizontal, Λ, horizontal); alas anchas y redondeadas, brazo pardo
 con borde de fuga negro, franja blanca y mano negra. Seis cuadros antes de posarse: alas arriba en V
 mostrando el blanco y patas adelante; al tocar el suelo, squash (Y 0,9) y las alas se pliegan.
 En el suelo: dormidas en tres poses (en una pata, en dos, echadas), a escala según la profundidad y en
 grupos que se solapan; cada ave se compone por separado, de atrás hacia adelante.
 La posta (sin líquido: el rojo es una plancha riso): la «A» de ALERTA se vuelve la vigía de turno y
-vuela con su plancha roja encima, en multiply y descuadrada 3 px; las demás letras rojas sueltan su
-plancha al sustituirse (se corre 6–8 px y se apaga en 3 cuadros, como papel que sale de la prensa). Al
+vuela con su plancha roja encima, en multiply y descuadrada 3 px. Al
 posarse, la plancha de la A se contrae hacia el ojo en 6 cuadros y deja solo el ojo rojo, que destella.
+Las aves se pintan como la vigía: aguadas transparentes con granulación y borde oscurecido, gouache
+blanco y plumilla de grosor variable.
 """
 import cv2
 import numpy as np
 
 from . import queltehue as Q
 from .geometry import catmull_rom
-from .ink import Mask
+from .ink import Mask, Stroke
 
 FPS = 30.0
 K_SUB = 5          # cuadros desde el «pop» hasta la sustitución por el pájaro dibujado
@@ -77,23 +78,38 @@ class Stamp:
         a = np.clip(a * alpha * (0.78 + 0.22 * g), 0, 1)
         reg *= np.exp(a[..., None] * k * np.log(np.clip(color, 0.01, 1))[None, None, :])
 
-    def composite(self, img, colors, grain):
+    def composite(self, img, colors, grain, tex=None):
+        """Aguadas transparentes (lomo y cabeza), gouache opaco (blanco), tinta (negro) y rojo.
+
+        tex = dict(ph=altura del papel, dx, dy=desplazamiento de borde irregular, pigments={capa: color})"""
         if not self.ok:
             return
-        reg = img[self.y0:self.y1, self.x0:self.x1]
-        g = grain[self.y0:self.y1, self.x0:self.x1]
+        y0, y1, x0, x1 = self.y0, self.y1, self.x0, self.x1
+        reg = img[y0:y1, x0:x1]
+        g = grain[y0:y1, x0:x1]
+        gxy = None
         for k in self.LAYERS:
             a = self.m[k].array()
             if not a.any():
                 continue
-            if k in ("back", "head", "white"):
-                a = a * (0.80 + 0.20 * g)          # pigmento con grano de papel
+            if tex is not None and k in ("back", "head", "white"):
+                if gxy is None:
+                    hh, ww = a.shape
+                    gy_, gx_ = np.mgrid[0:hh, 0:ww].astype(np.float32)
+                    gxy = (gx_ + tex["dx"][y0:y1, x0:x1], gy_ + tex["dy"][y0:y1, x0:x1])
+                a = cv2.remap(a, gxy[0], gxy[1], cv2.INTER_LINEAR)
+            if tex is not None and k in tex["pigments"]:
+                # aguada: granulación en los valles del papel y borde que se oscurece al secar
+                ph = tex["ph"][y0:y1, x0:x1]
+                rim = np.clip(a - cv2.GaussianBlur(a, (0, 0), 1.3), 0, 1)
+                dens = np.clip(a * (0.80 + 0.40 * (1 - ph)) * (0.9 + 0.2 * g) + 0.9 * rim, 0, 1.4)
+                reg *= np.exp(dens[..., None] * 0.95 * np.log(np.clip(tex["pigments"][k], 0.02, 1))[None, None, :])
+                continue
+            if k == "white":
+                a = a * (0.78 + 0.22 * g)          # gouache: el grano del papel asoma
             aa = np.clip(a, 0, 1)[..., None]
             reg *= (1 - aa)
             reg += colors[k][None, None, :] * aa
-            if k in ("back", "head"):              # borde oscurecido, como una aguada que se seca
-                rim = np.clip(a - cv2.GaussianBlur(a, (0, 0), 1.2), 0, 1)
-                reg *= (1 - 0.14 * np.clip(rim * 2.5, 0, 1))[..., None]
 
 
 class Bird:
@@ -211,6 +227,9 @@ class Flock:
         self.red_birds = [b for b in self.birds if b.color == "red"]
         self.t_eye = self.duty.t_land + SHRINK_FRAMES / FPS
 
+    def set_textures(self, ph, dx, dy, pigments):
+        self.tex = dict(ph=ph, dx=dx, dy=dy, pigments=pigments)
+
     # --- la vigía de turno ------------------------------------------------------------------------------
     def duty_eye(self):
         b = self.duty
@@ -241,40 +260,17 @@ class Flock:
             ctx.fill()
             ctx.restore()
 
-    def _meta_body(self, m, b, pos, alpha=1.0):
-        # cuerpo y cabeza (35–40 % de la altura de la letra) en el vértice
-        r = b.lh
-        f = b.facing
-        a = np.linspace(0, 2 * np.pi, 22, endpoint=False)
-        m.fill_poly(np.stack([pos[0] + f * 0.16 * r * np.cos(a), pos[1] + 0.085 * r * np.sin(a)], 1), alpha)
-        hc = pos + np.array([f * 0.15 * r, -0.10 * r])
-        m.dot(hc[0], hc[1], 0.075 * r, alpha)
-        m.fill_poly([(hc[0] + f * 0.06 * r, hc[1] - 0.02 * r), (hc[0] + f * 0.16 * r, hc[1]),
-                     (hc[0] + f * 0.06 * r, hc[1] + 0.02 * r)], alpha)
-        m.fill_poly([(pos[0] - f * 0.14 * r, pos[1] - 0.02 * r), (pos[0] - f * 0.26 * r, pos[1] + 0.01 * r),
-                     (pos[0] - f * 0.14 * r, pos[1] + 0.04 * r)], alpha)
-
     def draw_letters(self, plates, t):
         for b in self.birds:
             k = b.k(t)
-            if t < b.t_pop or k < 2:
+            if t < b.t_pop or k < 2 or k >= K_SUB:
                 continue
-            if k < K_SUB:
-                pos = b.meta_pos(t)
-                flip = k >= 4                                   # k 2–3: se abre en V · k 4: aletazo en Λ
-                theta = np.deg2rad(20 if k == 2 else 40)
-                sc = 0.75
-                names = ("white", "red") if b.color == "red" else ("ink",)
-                for name in names:
-                    self._halves(plates[name], b, pos, theta, sc, flip, alpha=0.85 if flip else 1.0)
-                    self._meta_body(plates[name], b, pos)
-            elif b.color == "red" and not b.duty and k < K_SUB + 3:
-                # suelta su plancha: se corre 6–8 px y se apaga, como papel que sale de la prensa
-                j = k - K_SUB
-                pos = b.meta_pos(b.t_sub - 1e-3) + np.array([2.6, 1.6]) * (j + 1) * self.u
-                a = (0.7, 0.42, 0.18)[j]
-                self._halves(plates["red"], b, pos, np.deg2rad(40), 0.75, True, alpha=a)
-                self._meta_body(plates["red"], b, pos, alpha=a)
+            pos = b.meta_pos(t)
+            flip = k >= 4                                   # k 2–3: se abre en V · k 4: aletazo en Λ
+            theta = np.deg2rad(20 if k == 2 else 40)
+            names = ("white", "red") if b.color == "red" else ("ink",)
+            for name in names:
+                self._halves(plates[name], b, pos, theta, 0.75, flip, alpha=0.85 if flip else 1.0)
 
     # --- dibujo del ave en vuelo (vista frontal-baja: silueta en M) -------------------------------------
     def _wing(self, st, side, theta_deg, flex_deg, length, sp, center, bank):
@@ -321,16 +317,13 @@ class Flock:
         st.m["ink"].fill_poly(band(0.0, 0.46, edge_a=mid), 1.0)
         st.m["white"].fill_poly(band(0.40, 0.56), 1.0)
         st.m["ink"].fill_poly(band(0.54, 1.0), 1.0)
-        ol = to_screen(np.vstack([lead, trail[::-1]]))
-        c = st.m["ink"].ctx
-        c.set_line_width(max(0.6, 0.012 * sp))
-        c.move_to(*ol[0])
-        for q in ol[1:]:
-            c.line_to(*q)
-        c.close_path()
-        st.m["ink"].set_alpha(0.8)
-        c.stroke()
-        st.m["ink"].set_alpha(1.0)
+        # plumilla de grosor variable: borde de ataque firme, borde de fuga perdido y encontrado
+        rng = np.random.default_rng(int(abs(theta_deg) * 7 + length * 100) + (side > 0))
+        w = max(0.7, 0.016 * sp)
+        Stroke(to_screen(lead), w, rng, pool=0.35, smooth=False, taper=(0.15, 0.35), jitter=0.2).draw(st.m["ink"], 10)
+        tr = to_screen(trail)
+        Stroke(tr[:int(len(tr) * 0.55)], w * 0.6, rng, pool=0.2, smooth=False, taper=(0.3, 0.5),
+               jitter=0.25).draw(st.m["ink"], 10)
 
     def _fly_bird(self, st, b, t, pose=None, span=None, center=None, legs=False, upright=0.0):
         p, u = b.flight(t)
@@ -374,6 +367,9 @@ class Flock:
                               1.0)
         bib = _rot(np.array([(-0.05, -0.045), (0.05, -0.045), (0.06, -0.005), (-0.06, -0.005)]) * sp, bank) + center
         st.m["ink"].fill_poly(bib, 1.0)
+        rng = np.random.default_rng(int(sp * 10) % 997)
+        Stroke(body[1:11], max(0.7, 0.014 * sp), rng, pool=0.3, smooth=False,
+               taper=(0.2, 0.3), jitter=0.2).draw(st.m["ink"], 10)
         c = st.m["ink"].ctx
         cr = _rot(np.array([(-f * 0.02, -0.04), (-f * 0.06, -0.07), (-f * 0.1, -0.075)]) * sp, bank) + hc
         c.set_line_width(max(0.6, 0.01 * sp))
@@ -441,14 +437,12 @@ class Flock:
             c.line_to(*cr[2])
             c.stroke()
             pb = X(body)
-            c.set_line_width(max(0.6, 0.008 * s) * b.lw_k)
-            c.move_to(*pb[0])
-            for q in pb[1:]:
-                c.line_to(*q)
-            c.close_path()
-            ink.set_alpha(0.8)
-            c.stroke()
-            ink.set_alpha(1.0)
+            n = len(pb)
+            rng = np.random.default_rng(int(b.feet[0] * 13 + b.feet[1]) % 100003)
+            Stroke(pb[:int(n * 0.5)], max(0.8, 0.016 * s) * b.lw_k, rng, pool=0.35, smooth=False, taper=(0.2, 0.3),
+                   jitter=0.2).draw(ink, 10)
+            Stroke(pb[int(n * 0.6):int(n * 0.9)], max(0.6, 0.009 * s) * b.lw_k, rng, pool=0.2, smooth=False,
+                   taper=(0.3, 0.4), jitter=0.2).draw(ink, 10)
             return
         body = catmull_rom(np.array(Q.BODY), 6, closed=True)
         for leg in (() if silhouette else (Q.LEG_FAR, Q.LEG_NEAR)):
@@ -473,14 +467,14 @@ class Flock:
             c.line_to(*q)
         c.stroke()
         pb = X(body)
-        c.set_line_width(max(0.6, 0.008 * s) * (1.8 if b.duty else b.lw_k))
-        c.move_to(*pb[0])
-        for q in pb[1:]:
-            c.line_to(*q)
-        c.close_path()
-        ink.set_alpha(0.85)
-        c.stroke()
-        ink.set_alpha(1.0)
+        n = len(pb)
+        rng = np.random.default_rng(int(b.feet[0] * 13 + b.feet[1]) % 100003)
+        wk = 1.6 if b.duty else b.lw_k
+        # vientre y pecho en sombra: trazo grueso; lomo a la luz: trazo fino y cortado
+        Stroke(pb[int(n * 0.02):int(n * 0.55)], max(0.8, 0.017 * s) * wk, rng, pool=0.4, smooth=False,
+               taper=(0.15, 0.3), jitter=0.2).draw(ink, 10)
+        Stroke(pb[int(n * 0.62):int(n * 0.95)], max(0.6, 0.009 * s) * wk, rng, pool=0.25, smooth=False,
+               taper=(0.3, 0.4), jitter=0.25).draw(ink, 10)
         if wings_fold is not None:
             # alas aún abiertas en V que se pliegan sobre el lomo
             th, ln = wings_fold
@@ -539,7 +533,7 @@ class Flock:
                     if red:
                         st.composite_glaze(img, colors["red"], 0.95, grain)
                     else:
-                        st.composite(img, colors, grain)
+                        st.composite(img, colors, grain, getattr(self, "tex", None))
             else:
                 k = int(np.floor((t - b.t_land) * FPS + 1e-6))
                 s = b.h_land / 0.82
@@ -555,7 +549,7 @@ class Flock:
                 else:
                     kw = {}
                 self._stand(st, b, t, **kw)
-                st.composite(img, colors, grain)
+                st.composite(img, colors, grain, getattr(self, "tex", None))
                 if b.duty and k < SHRINK_FRAMES:
                     # la plancha roja se contrae hacia el ojo (escala 1 → 0,08, anclada en el ojo)
                     E, _ = self.duty_eye()

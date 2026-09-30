@@ -15,7 +15,7 @@ de campo**. Pensada también como *hero* con efecto de scroll para la web.
 
 Un **queltehue** (*Vanellus chilensis*), el centinela del campo chileno, despierta cuando en el cerro
 aparece una **torre de medición de viento** —la primera huella de un proyecto eólico—; su **ojo rojo**
-se vuelve **ALERTA**; las motas del propio papel (el «murmullo» de señales débiles) forman el título;
+grita **ALERTA**; las motas del propio papel (el «murmullo» de señales débiles) forman el título;
 todo **encaja de un golpe**; y cada letra se vuelve **un queltehue** que baja al potrero. La «A» de
 ALERTA vuela con su plancha roja de imprenta, que al posarse se contrae hasta su ojo: **la vigía de
 turno**, mientras las demás duermen. *Cuando una ve, todas vuelan; duermen por turnos.*
@@ -25,17 +25,18 @@ turno**, mientras las demás duermen. *Cuando una ve, todas vuelan; duermen por 
 | Archivo | Qué es |
 |---|---|
 | `output/cuando_una_ve_1920x1080.mp4` | Versión escritorio 16:9, H.264, 5 s, 30 fps |
-| `output/cuando_una_ve_1080x1350.mp4` | Versión móvil 4:5 |
+| `output/cuando_una_ve_1080x1350.mp4` | Versión 4:5 (redes, tableta) |
+| `output/cuando_una_ve_1080x1920.mp4` | Versión teléfono 9:16, pantalla completa |
 | `output/*_scroll.mp4` | Mismas versiones con **todos los cuadros clave** (para controlar con `video.currentTime`) |
 | `output/poster_*.png` | Cuadro 0 (póster), cuadro del título y cuadro final, en PNG |
 | `output/vista_previa.gif` | Vista previa liviana (720 px, 15 fps) |
 | `web/index.html` | Demo del *hero* con scroll (secuencia de cuadros en `<canvas>`) |
-| `web/frames/landscape`, `web/frames/portrait` | Cuadros WebP para la demo (≈ 8 MB y 7 MB) |
+| `web/frames/landscape`, `portrait`, `tall` | Cuadros WebP para la demo (16:9, 4:5 y 9:16; ≈ 8, 7 y 8 MB) |
 | `satc_intro/` | El código que genera todo |
 
 ## Cómo generar la animación
 
-Todo de una vez (MP4 16:9 y 4:5, versiones para scroll, cuadros WebP de la web y pósters):
+Todo de una vez (MP4 16:9, 4:5 y 9:16, versiones para scroll, cuadros WebP de la web, pósters y GIF):
 
 ```bash
 pip install -r requirements.txt
@@ -50,25 +51,30 @@ python -m satc_intro.render --size 1920x1080 \
     --out output/cuando_una_ve_1920x1080.mp4 \
     --scroll-out output/cuando_una_ve_1920x1080_scroll.mp4 --scroll-width 1280 \
     --web-dir web/frames/landscape --web-width 1600
-# 4:5 (móvil)
+# 4:5
 python -m satc_intro.render --size 1080x1350 \
     --out output/cuando_una_ve_1080x1350.mp4 \
     --scroll-out output/cuando_una_ve_1080x1350_scroll.mp4 --scroll-width 720 \
     --web-dir web/frames/portrait --web-width 960
+# 9:16 (teléfono)
+python -m satc_intro.render --size 1080x1920 \
+    --out output/cuando_una_ve_1080x1920.mp4 \
+    --scroll-out output/cuando_una_ve_1080x1920_scroll.mp4 --scroll-width 720 \
+    --web-dir web/frames/tall --web-width 1000 --web-quality 66
 ```
 
 Con 4 núcleos, cada versión tarda menos de un minuto (150 cuadros). Se puede renderizar a cualquier
-tamaño: la maquetación se adapta a formatos horizontales (≥ 1,2:1) o verticales.
+tamaño: la maquetación tiene variantes horizontal (≥ 1,2:1), 4:5 y 9:16.
 
 ## Cómo usarla en la web (efecto scroll)
 
 `web/index.html` implementa el comportamiento recomendado por la verificación:
 
-1. al cargar, **los actos I–II corren solos** hasta el título quieto (cuadros 0–84);
-2. **el scroll maneja el acto III** (la suelta y el aterrizaje, cuadros 84–149);
+1. al cargar, **los actos I–II corren solos** hasta el título quieto (cuadros 0–72);
+2. **el scroll maneja el acto III** (la suelta y el aterrizaje, cuadros 72–149);
 3. al volver hacia arriba, **la bandada regresa y vuelve a formar el título**;
-4. hay un `<h1>` real (accesible e indexable), versión 16:9 o 4:5 según la pantalla y respeto de
-   `prefers-reduced-motion`.
+4. hay un `<h1>` real (accesible e indexable), la versión 16:9, 4:5 o 9:16 que mejor calce con la
+   pantalla y respeto de `prefers-reduced-motion`.
 
 Para probarla localmente: `python -m http.server` en la raíz del repositorio y abrir
 `http://localhost:8000/web/`.
@@ -83,13 +89,13 @@ Alternativa con video: usar `output/*_scroll.mp4` (todos sus cuadros son clave) 
 | `paper.py` | Kraft procedural: formación nubosa, fibras, motas, grano, viñeta. Las motas que se levantarán no se hornean. |
 | `watercolor.py` | Aguadas por polígonos deformados y apilados (técnica de Tyler Hobbs), oscurecimiento de bordes, granulación sobre el relieve del papel, *backruns*, gouache opaco. |
 | `landscape.py` | El territorio: cordillera en neblina, cerro de la torre, cercos vivos en tres filas (con álamos y pincel seco), potrero. |
-| `queltehue.py` | La vigía: ilustración con aguadas, plumilla «perdida y encontrada», cresta que se eriza, ojo rojo, grito. |
+| `queltehue.py` | La vigía: ilustración con aguadas, plumilla «perdida y encontrada», picoteo, cresta que se eriza, ojo rojo y grito con el pico abierto. |
 | `tower.py` | La torre de medición: única línea de regla, grosor constante y velocidad mecánica. |
-| `murmur.py` | ~1300 motas del kraft (visibles desde el cuadro 0) se despegan, giran juntas y forman las palabras como puntillado. |
+| `murmur.py` | ~1300 motas del kraft (visibles desde el cuadro 0) se despegan, giran juntas y forman las palabras como puntillado, que se densifica «en dos» hasta leerse antes del clic. |
 | `title.py` | Título riso: planchas rígidas descuadradas que tiemblan «en dos» y encajan en un clic con sobreimpulso. |
 | `flock.py` | Letras → queltehues: onda desde el ojo, letras que se parten y se abren como alas, vuelo en 4 poses, aterrizaje, sueño en grupos y la posta de la plancha roja. |
 | `plate.py` | Aparato de lámina: marco, cabecera, leyenda, huellas, «No confundir con», distribución. |
-| `scene.py` | Maquetación 16:9 / 4:5 y línea de tiempo de los tres actos. |
+| `scene.py` | Maquetación 16:9 / 4:5 / 9:16 y línea de tiempo de los tres actos. |
 | `render.py` | Render en paralelo y codificación con ffmpeg. |
 
 ## Proceso de verificación

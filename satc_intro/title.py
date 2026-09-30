@@ -22,10 +22,12 @@ def _rigid(ctx, cx, cy, dx, dy, rot, sx=1.0, sy=None):
 
 
 class Title:
-    def __init__(self, lay, font, eye_fn, rng, t_click=2.00, flight=0.40):
+    def __init__(self, lay, font, eye_fn, rng, t_click=2.00, flight=0.40, beak_fn=None, t_ring=None):
         self.lay = lay
         self.font = font
         self.eye_fn = eye_fn          # t -> posición del ojo en pantalla
+        self.beak_fn = beak_fn or eye_fn   # t -> punta del pico: de ahí sale el grito
+        self.t_ring = t_ring               # anillo limpio que sale de la pupila al gritar
         self.t_click = t_click
         self.flight = flight           # cada letra de ALERTA vuela 12 cuadros
         cx = lay["title_cx"]
@@ -86,18 +88,18 @@ class Title:
         return sign * (R @ jump) * np.hypot(*self.mis)
 
     def letter_flight(self, k, t):
-        """Posición del centro, escala y avance de la letra k de ALERTA (sale de la pupila)."""
+        """Posición del centro, escala y avance de la letra k de ALERTA (sale del pico abierto)."""
         L = self.alerta.letters[k]
         t0 = self.depart[k]
         u = np.clip((t - t0) / self.flight, 0, 1)
         e = 1 - (1 - u) ** 2.4
-        p0 = self.eye_fn(t0)
+        p0 = self.beak_fn(t0)
         p3 = L.center
         uu = self.lay["u"]
-        p1 = p0 + np.array([30, -200]) * uu
-        p2 = p3 + np.array([-200 + 30 * k, 60]) * uu
+        p1 = p0 + np.array([150, -12]) * uu                 # sale hacia adelante, por las líneas de voz
+        p2 = p3 + np.array([-150 + 20 * k, 70]) * uu
         b = ((1 - e) ** 3) * p0 + 3 * e * (1 - e) ** 2 * p1 + 3 * e * e * (1 - e) * p2 + e ** 3 * p3
-        s = 0.06 + 0.94 * e ** 1.3
+        s = 0.10 + 0.90 * e ** 1.2
         return b, s, u
 
     # --- dibujo --------------------------------------------------------------------------------------
@@ -135,7 +137,7 @@ class Title:
                         bx = (L.box[0] + L.box[2]) / 2
                         by = L.box[3]
                         ctx.translate(bx, by)
-                        ctx.scale(1.06, 0.8)
+                        ctx.rotate(np.deg2rad(3.5 if k == 0 else -3.5))   # se estremece, sin achatarse
                         ctx.translate(-bx, -by)
                     L.draw(ctx)
                     ctx.restore()
@@ -162,7 +164,7 @@ class Title:
                         bx = (L.box[0] + L.box[2]) / 2
                         by = L.box[3]
                         ctx.translate(bx, by)
-                        ctx.scale(1.06, 0.8)
+                        ctx.rotate(np.deg2rad(3.5 if kk == 0 else -3.5))  # se estremece, sin achatarse
                         ctx.translate(-bx, -by)
                 else:
                     cx, cy = L.center
@@ -196,20 +198,16 @@ class Title:
                     masks["red"].set_alpha(0.3)
                     ctx.fill()
                     ctx.restore()
-        # salpicadura: cada letra sale de la pupila con unas gotas rojas (6–8 px) que se abren y se apagan
-        uu = self.lay["u"]
-        for k, L in enumerate(self.alerta.letters):
-            d = (t - self.depart[k]) * FPS
-            if not (0 <= d < 6):
-                continue
-            eye = self.eye_fn(self.depart[k])
-            p1, _, _ = self.letter_flight(k, self.depart[k] + 2.0 / FPS)
-            dirv = p1 - eye
-            base = np.arctan2(dirv[1], dirv[0])
-            r = np.random.default_rng(1000 + k)
-            for j in range(3):
-                a = base + r.uniform(-0.6, 0.6)
-                dist = (10 + r.uniform(12, 30) * (1 - (1 - d / 6) ** 2)) * uu
-                q = eye + np.array([np.cos(a), np.sin(a)]) * dist
-                rad = r.uniform(3.0, 4.0) * uu * (1 - d / 7)
-                masks["red"].dot(q[0], q[1], rad, 1.0)
+        # anillo limpio que sale de la pupila al gritar (sin gotas)
+        if self.t_ring is not None:
+            d = (t - self.t_ring) * FPS
+            if 0 <= d < 6:
+                uu = self.lay["u"]
+                e = self.eye_fn(self.t_ring)
+                r = (9 + 7.5 * d) * uu
+                c = masks["red"].ctx
+                c.set_line_width(max(0.8, (2.8 - 0.4 * d) * uu))
+                c.new_path()
+                c.arc(e[0], e[1], r, 0, 2 * np.pi)
+                masks["red"].set_alpha(0.9 * (1 - d / 6))
+                c.stroke()

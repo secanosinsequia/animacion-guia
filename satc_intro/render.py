@@ -103,6 +103,7 @@ def main(argv=None):
     ap.add_argument("--frames-dir", default=None)
     ap.add_argument("--web-dir", default=None, help="exportar secuencia WebP para la web")
     ap.add_argument("--web-width", type=int, default=1600)
+    ap.add_argument("--web-quality", type=int, default=74)
     ap.add_argument("--scroll-width", type=int, default=None, help="ancho del MP4 para scroll (reescala)")
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--crf", type=int, default=16)
@@ -118,7 +119,7 @@ def main(argv=None):
     if a.scroll_out:
         encode(frames_dir, a.scroll_out, crf=a.crf + 8, all_intra=True, preset="medium", width=a.scroll_width)
     if a.web_dir:
-        export_web_frames(frames_dir, a.web_dir, a.web_width)
+        export_web_frames(frames_dir, a.web_dir, a.web_width, quality=a.web_quality)
 
 
 if __name__ == "__main__":

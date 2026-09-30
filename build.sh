@@ -13,11 +13,17 @@ python -m satc_intro.render --size 1080x1350 --frames-dir build/frames_1080x1350
   --out output/cuando_una_ve_1080x1350.mp4 \
   --scroll-out output/cuando_una_ve_1080x1350_scroll.mp4 --scroll-width 720 \
   --web-dir web/frames/portrait --web-width 960
-# Pósters (cuadro 0 y cuadro del título)
+# 9:16 teléfono (hero a pantalla completa)
+python -m satc_intro.render --size 1080x1920 --frames-dir build/frames_1080x1920 \
+  --out output/cuando_una_ve_1080x1920.mp4 \
+  --scroll-out output/cuando_una_ve_1080x1920_scroll.mp4 --scroll-width 720 \
+  --web-dir web/frames/tall --web-width 1000 --web-quality 66
+# Pósters (cuadro 0, cuadro del título y cuadro final)
 cp build/frames_1920x1080/f0000.png output/poster_1920x1080_inicio.png
-cp build/frames_1920x1080/f0080.png output/poster_1920x1080_titulo.png
+cp build/frames_1920x1080/f0066.png output/poster_1920x1080_titulo.png
 cp build/frames_1920x1080/f0149.png output/poster_1920x1080_final.png
-cp build/frames_1080x1350/f0080.png output/poster_1080x1350_titulo.png
+cp build/frames_1080x1350/f0066.png output/poster_1080x1350_titulo.png
+cp build/frames_1080x1920/f0066.png output/poster_1080x1920_titulo.png
 # Vista previa liviana en GIF
 FF=$(python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())")
 "$FF" -y -loglevel error -i output/cuando_una_ve_1920x1080.mp4 \

@@ -1,14 +1,15 @@
 """La lámina completa y su línea de tiempo (5 s, 30 fps).
 
-Acto I   (0,00–0,90) La vigía y la torre: la torre se traza con regla; el queltehue despierta y abre
-                     el ojo: el primer rojo.
-Acto II  (0,90–3,00) El murmullo y el clic: las motas del kraft se despegan y forman las palabras como
-                     puntillado; el queltehue grita y ALERTA sale de su pupila letra por letra; en el
-                     clic (2,0 s) todo se imprime en registro y el papel se hunde (queda la marca de
-                     plancha). El título queda quieto 1 s.
-Acto III (3,00–5,00) La suelta y la posta: onda circular desde el ojo; cada letra se abre como alas y
-                     es un queltehue que baja al potrero; el rojo de ALERTA escurre hasta el ojo de la
-                     vigía de turno; las demás duermen; el queltehue cierra el suyo; nota final.
+Acto I   (0,00–0,55) La vigía y la torre: la torre se traza con regla en 0,4 s; el queltehue deja de
+                     picotear, despierta y abre el ojo: el primer rojo.
+Acto II  (0,55–2,62) El murmullo y el clic: las motas del kraft se despegan y forman las palabras
+                     como puntillado, que se densifica hasta leerse; el queltehue grita y ALERTA sale
+                     de su pico abierto letra por letra; en el clic (1,65 s) todo se imprime en
+                     registro y el papel se hunde. El título queda quieto ~1 s.
+Acto III (2,62–5,00) La suelta y la posta: onda desde el ojo; cada letra se abre como alas y es un
+                     queltehue que baja al potrero; la «A» vuela con su plancha roja, que al posarse
+                     se contrae hasta su ojo: la vigía de turno; las demás duermen; el queltehue
+                     cierra el suyo; nota final y ≥ 1,1 s de reposo.
 """
 import cv2
 import numpy as np
@@ -29,8 +30,8 @@ from .typography import Font, Word
 FPS = 30
 DURATION = 5.0
 
-T = dict(tower=(0.10, 0.72), legend2=0.62, alert=0.70, eye=0.80, lift=(0.86, 1.12), shout=(1.40, 1.62),
-         click=2.00, release=3.00, sleep=3.98, note=(3.95, 4.20))
+T = dict(tower=(0.06, 0.46), legend2=0.40, alert=0.44, eye=0.52, lift=(0.55, 0.80), shout=(1.02, 1.28),
+         click=1.65, release=2.62, sleep=3.60, note=(3.55, 3.80))
 
 
 def layout(W, H):
@@ -50,6 +51,25 @@ def layout(W, H):
             land_box=(700 * u, 800 * v, 1700 * u, 938 * v), land_h=(26 * v, 42 * v),
             duty_pt=s(1010, 950), duty_h=132 * v,
             note_cx=1075 * u, note_y=(300 * v, 352 * v), note_cap=26 * u,
+        )
+    if H / W > 1.5:
+        # 9:16 (teléfono, pantalla completa)
+        u = W / 1080.0
+        v = H / 1920.0
+        s = lambda x, y: (x * u, y * v)
+        return dict(
+            portrait=True, inset_scale=0.78,
+            u=u, frame=22 * u, margin=48 * u, head_base=64 * v, head_rule=82 * v, head_cap=12.5 * u,
+            foot_rule=1790 * v, foot_l1=1822 * v, foot_l2=1852 * v, foot_cap=12.5 * u,
+            plate_box=(60 * u, 1180 * v, 1020 * u, 1775 * v), horizon=1390 * v, tower_base=s(870, 1382),
+            tower_h=330 * v, meadow_top=1480 * v, bird_feet=s(285, 1748), bird_size=450 * v,
+            hill_w=320 * u, hill_h=105 * u,
+            num1=s(66, 1738), num2=s(896, 1032), huellas=s(560, 1818), no_confundir=s(800, 1818),
+            map_x=1000 * u, map_top=130 * v, map_bottom=400 * v,
+            title_cx=490 * u, title_w=740 * u, title_top=300 * v, title_gap=16 * v, title_small_cap=52 * v,
+            land_box=(560 * u, 1510 * v, 1000 * u, 1765 * v), land_h=(30 * v, 50 * v),
+            duty_pt=s(700, 1770), duty_h=150 * v,
+            note_cx=520 * u, note_y=(640 * v, 694 * v), note_cap=28 * u,
         )
     u = W / 1080.0
     v = H / 1350.0
@@ -123,10 +143,11 @@ class Scene:
 
         # --- elementos animados ---------------------------------------------------------------------------
         self.tower = Tower(L["tower_base"], L["tower_h"], scale=u, t0=T["tower"][0], t1=T["tower"][1])
-        self.title = Title(L, self.fonts["anton"], self.q.eye_screen, rng, t_click=T["click"])
+        self.title = Title(L, self.fonts["anton"], self.q.eye_screen, rng, t_click=T["click"],
+                           beak_fn=self.q.beak_screen, t_ring=T["shout"][0])
         blk = self.title.block
         # puntillado: puntos con distancia mínima dentro de cada palabra en tinta
-        targets = []
+        targets, fills = [], []
         for w in self.title.words:
             if w.color != "ink":
                 continue
@@ -137,13 +158,15 @@ class Scene:
             m.ctx.fill()
             area = (m.array() > 0.6)
             n_w = int(np.clip(area.sum() / (24.0 * u * u), 220, 640))
-            # el contorno define la letra: ~60 % de los puntos en el borde, el resto adentro
+            # el contorno define la letra: ~68 % de los puntos en el borde, el resto adentro
             er = cv2.erode(area.astype(np.uint8), np.ones((5, 5), np.uint8), iterations=max(1, int(round(u)))) > 0
             edge = area & ~er
             n_e = int(n_w * 0.68)
             pe = blue_noise_in_mask(edge, n_e, rng, max(2.4 * u, np.sqrt(edge.sum() / max(1, n_e)) * 0.8))
             pi = blue_noise_in_mask(er, n_w - len(pe), rng, max(3.2 * u, np.sqrt(er.sum() / max(1, n_w - n_e)) * 0.75))
             targets.append(np.vstack([pe, pi]) if len(pi) else pe)
+            # puntos de relleno: la tinta se asienta dentro de los trazos antes del clic
+            fills.append(blue_noise_in_mask(area, int(area.sum() / (11.0 * u * u)), rng, 2.7 * u))
         targets = np.vstack(targets)
         # motas de origen: visibles desde el cuadro 0, fuera del título y del queltehue, más en el cielo
         x0b, y0b, x1b, y1b = blk
@@ -161,13 +184,15 @@ class Scene:
         sources = ok[:len(targets)]
         targets = targets[:len(sources)]
         self.murmur = Murmur(sources, targets, rng, center=np.array([(x0b + x1b) / 2, (y0b + y1b) / 2]), u=u,
-                             t_lift=T["lift"], t_print=T["click"] - 2.0 / FPS)
+                             t_lift=T["lift"], t_print=T["click"] - 2.0 / FPS, fill=np.vstack(fills))
         eye_rel = self.q.eye_screen(T["release"])
-        self.flock = Flock(self.title, L, rng, W, H, t_release=T["release"], eye=eye_rel)
+        self.flock = Flock(self.title, L, rng, W, H, t_release=T["release"], eye=eye_rel, spread=0.45)
         # colores efectivos de las aves: los mismos pigmentos que la vigía, sobre el kraft
         kraft = self.paper.reshape(-1, 3).mean(axis=0)
         self.bird_colors = dict(back=kraft * lin("#7d7465") ** 0.95, head=kraft * lin("#8f8a80") ** 0.95,
                                 white=self.col["white"], ink=self.col["ink"], red=self.col["red"])
+        self.flock.set_textures(ph, self.rough_dx * 1.6, self.rough_dy * 1.6,
+                                dict(back=lin("#7d7465"), head=lin("#8f8a80")))
 
         # --- grano fijo al papel, distinto en cada plancha --------------------------------------------------
         fine = fbm((H, W), 1.6, r2, octaves=2)

@@ -41,7 +41,7 @@ def blue_noise_in_mask(mask, n, rng, rmin):
 
 class Murmur:
     def __init__(self, sources, targets, rng, center, u=1.0, t_lift=(0.86, 1.12), travel=(0.40, 0.52),
-                 t_print=1.933, turns=(0.10, 0.35)):
+                 t_print=1.933, turns=(0.10, 0.35), fill=None, fill_frames=8):
         n = len(targets)
         self.p0 = sources[:n, :2].astype(np.float64)
         self.r = sources[:n, 2] * u
@@ -63,6 +63,13 @@ class Murmur:
         self.squash = rng.uniform(0.55, 0.75, n)
         self.u = u
         self.seed = int(rng.integers(1 << 30))
+        # tinta que se asienta: puntos finos que aparecen «en dos» dentro de los trazos antes del clic,
+        # para que el puntillado ya se lea como palabra y el clic lo confirme
+        self.fill = np.zeros((0, 3)) if fill is None else np.asarray(fill, np.float64)
+        if len(self.fill):
+            k = rng.integers(1, fill_frames // 2 + 1, len(self.fill)) * 2
+            self.fill_t = t_print - k / FPS
+            self.fill_r = rng.uniform(1.0, 1.45, len(self.fill)) * u
 
     def _pos(self, t):
         e = np.clip((t - self.t0) / (self.t1 - self.t0), 0, 1)
@@ -88,10 +95,12 @@ class Murmur:
             return
         p, e, env = self._pos(t)
         pp, _, _ = self._pos(t - 1.0 / 60)
-        # temblor «en dos» de las motas ya asentadas
+        # temblor «en dos» (muy leve) de las motas ya asentadas
         step = int(np.floor(t * FPS / 2))
         jr = np.random.default_rng((self.seed + step * 7919) % (1 << 31))
-        jit = jr.normal(0, 1.1 * self.u, p.shape)
+        jit = jr.normal(0, 0.45 * self.u, p.shape)
+        for i in np.nonzero(t >= self.fill_t)[0] if len(self.fill) else []:
+            masks["speck"].dot(self.fill[i, 0], self.fill[i, 1], self.fill_r[i], 0.96)
         for i in range(len(p)):
             ei = e[i]
             if ei > 0:
