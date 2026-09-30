@@ -61,11 +61,14 @@ def render_frames(W, H, frames_dir, workers=None, seed=7, only=None):
     return n
 
 
-def encode(frames_dir, out, crf=16, all_intra=False, preset="slow"):
+def encode(frames_dir, out, crf=16, all_intra=False, preset="slow", width=None):
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     cmd = [ffmpeg_bin(), "-y", "-loglevel", "error", "-framerate", str(FPS), "-i",
-           os.path.join(frames_dir, "f%04d.png"), "-c:v", "libx264", "-preset", preset, "-crf", str(crf),
-           "-tune", "grain", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-profile:v", "high"]
+           os.path.join(frames_dir, "f%04d.png")]
+    if width:
+        cmd += ["-vf", f"scale={int(width)}:-2:flags=lanczos"]
+    cmd += ["-c:v", "libx264", "-preset", preset, "-crf", str(crf),
+            "-tune", "grain", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-profile:v", "high"]
     if all_intra:
         # Cada cuadro es clave: ideal para controlar la animación con el scroll (video.currentTime)
         cmd += ["-g", "1", "-keyint_min", "1", "-sc_threshold", "0"]
@@ -100,6 +103,7 @@ def main(argv=None):
     ap.add_argument("--frames-dir", default=None)
     ap.add_argument("--web-dir", default=None, help="exportar secuencia WebP para la web")
     ap.add_argument("--web-width", type=int, default=1600)
+    ap.add_argument("--scroll-width", type=int, default=None, help="ancho del MP4 para scroll (reescala)")
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--crf", type=int, default=16)
     ap.add_argument("--seed", type=int, default=7)
@@ -112,7 +116,7 @@ def main(argv=None):
     if a.out:
         encode(frames_dir, a.out, crf=a.crf)
     if a.scroll_out:
-        encode(frames_dir, a.scroll_out, crf=a.crf + 2, all_intra=True, preset="medium")
+        encode(frames_dir, a.scroll_out, crf=a.crf + 4, all_intra=True, preset="medium", width=a.scroll_width)
     if a.web_dir:
         export_web_frames(frames_dir, a.web_dir, a.web_width)
 

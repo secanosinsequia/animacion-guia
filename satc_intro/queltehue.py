@@ -363,7 +363,8 @@ class Queltehue:
             cr = np.asarray(cr, np.float64)
             base = cr[0]
             rel = cr - base
-            a = np.deg2rad(-8 + 36 * e - 4 * j)
+            t2 = np.floor(t * 15) / 15          # el viento mueve la cresta «en dos»
+            a = np.deg2rad(-8 + 36 * e - 4 * j + 3.2 * np.sin(t2 * 2 * np.pi * 0.85 + 1.3 * j))
             c, s = np.cos(a), np.sin(a)
             rel = rel @ np.array([[c, -s], [s, c]]).T
             strokes.append(Stroke(hs(rel + base), (3.4 - 1.1 * j) * self.u, rng, taper=(0.03, 0.92), pool=0.25,

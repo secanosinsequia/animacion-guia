@@ -30,8 +30,16 @@ turnos.*
 
 ## Cómo generar la animación
 
+Todo de una vez (MP4 16:9 y 4:5, versiones para scroll, cuadros WebP de la web y pósters):
+
 ```bash
 pip install -r requirements.txt
+./build.sh
+```
+
+O por partes:
+
+```bash
 # 16:9 (escritorio): cuadros + MP4 + MP4 para scroll + secuencia WebP
 python -m satc_intro.render --size 1920x1080 \
     --out output/cuando_una_ve_1920x1080.mp4 \
@@ -51,8 +59,8 @@ tamaño: la maquetación se adapta a formatos horizontales (≥ 1,2:1) o vertica
 
 `web/index.html` implementa el comportamiento recomendado por la verificación:
 
-1. al cargar, **los actos I–II corren solos** hasta el título quieto (cuadros 0–99);
-2. **el scroll maneja el acto III** (la suelta y el aterrizaje, cuadros 99–149);
+1. al cargar, **los actos I–II corren solos** hasta el título quieto (cuadros 0–84);
+2. **el scroll maneja el acto III** (la suelta y el aterrizaje, cuadros 84–149);
 3. al volver hacia arriba, **la bandada regresa y vuelve a formar el título**;
 4. hay un `<h1>` real (accesible e indexable), versión 16:9 o 4:5 según la pantalla y respeto de
    `prefers-reduced-motion`.

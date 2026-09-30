@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sistema de Alerta Temprana Comunitario — Guía SATC</title>
 <meta name="description" content="Guía para comunidades, organizaciones y personas defensoras ambientales. Red Comunitaria de Alerta Energética.">
+<link rel="icon" href="data:,">
 <style>
   @font-face { font-family: "IM Fell English"; src: url("../assets/fonts/IMFellEnglish-Roman.ttf") format("truetype"); font-display: swap; }
   @font-face { font-family: "IM Fell English"; font-style: italic; src: url("../assets/fonts/IMFellEnglish-Italic.ttf") format("truetype"); font-display: swap; }
@@ -26,7 +27,7 @@
   .hero__sticky { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; background: var(--kraft); }
   .hero canvas { display: block; width: 100%; height: 100%; }
   .hero__hint {
-    position: absolute; right: 18px; bottom: 18px; padding: 6px 12px 7px;
+    position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); padding: 6px 12px 7px;
     background: rgba(205, 177, 137, .92); border: 1px solid rgba(34, 26, 20, .45); border-radius: 999px;
     font-style: italic; font-size: 14px; letter-spacing: .02em; opacity: 0; transition: opacity .6s;
     pointer-events: none; color: var(--ink);
@@ -85,7 +86,8 @@
   // --- Configuración ---------------------------------------------------------------------
   const FPS = 30;
   const TOTAL = 150;          // 5 s a 30 fps
-  const AUTOPLAY_END = 99;    // actos I–II (hasta el título quieto, 3,3 s): corren solos al cargar
+  const AUTOPLAY_END = 84;    // actos I–II (hasta el título quieto, 2,8 s): corren solos al cargar
+  const TITLE_FRAME = 80;     // cuadro del título encajado (para prefers-reduced-motion)
   const SETS = {
     landscape: { dir: "frames/landscape/", w: 16, h: 9 },
     portrait:  { dir: "frames/portrait/",  w: 4,  h: 5 },
@@ -98,7 +100,8 @@
   let set = null, frames = [], current = -1, autoplayDone = false, autoplayFrame = 0;
 
   const pad = (n) => String(n).padStart(3, "0");
-  const pickSet = () => (innerWidth / innerHeight < 0.95 ? "portrait" : "landscape");
+  // el juego de cuadros cuya proporción se parece más a la de la pantalla (umbral ≈ 1,19)
+  const pickSet = () => (innerWidth / innerHeight < 1.19 ? "portrait" : "landscape");
 
   function load(name) {
     set = name;
@@ -128,11 +131,28 @@
     if (!img || !img.complete || !img.naturalWidth) return;
     if (k === current && !force) return;
     current = k;
-    // encuadre tipo "cover", anclado un poco arriba para no cortar el título
     const cw = canvas.width, ch = canvas.height;
-    const s = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
-    const w = img.naturalWidth * s, h = img.naturalHeight * s;
-    ctx.drawImage(img, (cw - w) / 2, (ch - h) * 0.35, w, h);
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const mismatch = Math.max((iw / ih) / (cw / ch), (cw / ch) / (iw / ih));
+    if (mismatch < 1.15) {
+      // proporciones parecidas: "cover" (llena la pantalla, recorta un poco)
+      const s = Math.max(cw / iw, ch / ih);
+      const w = iw * s, h = ih * s;
+      ctx.drawImage(img, (cw - w) / 2, (ch - h) * 0.35, w, h);
+    } else {
+      // muy distintas (p. ej. teléfono alto): la lámina entera, apoyada sobre el kraft
+      const s = Math.min(cw / iw, ch / ih);
+      const w = iw * s, h = ih * s, x = (cw - w) / 2, y = (ch - h) * 0.42;
+      ctx.fillStyle = "#cdb189";
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.save();
+      ctx.shadowColor = "rgba(40, 28, 16, .28)";
+      ctx.shadowBlur = 18 * (devicePixelRatio || 1);
+      ctx.shadowOffsetY = 6 * (devicePixelRatio || 1);
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+      ctx.drawImage(img, x, y, w, h);
+    }
   }
 
   // Progreso del scroll dentro del hero (0 → 1)
@@ -183,8 +203,8 @@
   if (reduceMotion) {
     // Sin animación: se muestra el título ya encajado y el scroll no mueve nada.
     autoplayDone = true;
-    const show = () => draw(80, true);
-    frames[80].onload = show;
+    const show = () => draw(TITLE_FRAME, true);
+    frames[TITLE_FRAME].onload = show;
     show();
   } else {
     // Espera a que los primeros cuadros estén listos para no tartamudear.

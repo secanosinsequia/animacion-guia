@@ -70,15 +70,16 @@ recuadro **Distribución:** de Arica a Chiloé (mini-mapa).
 
 | Tiempo | Acto | Qué pasa |
 |---|---|---|
-| 0,00–1,20 | **I. La vigía y la torre** | Lámina completa (póster): el queltehue hurga el pasto. En el cerro, **la torre se traza sola con regla**: mástil, celosía, tensores rectos, brazos con anemómetros que empiezan a girar. El queltehue levanta la cabeza (anticipación, sobreimpulso, cresta erizada) y **abre el ojo: el primer rojo**. |
-| 1,20–3,30 | **II. El murmullo y el clic** | Las motas del kraft se levantan y convergen: **SISTEMA DE / TEMPRANA / COMUNITARIO** quedan flotando como *indicio* (pasadas descuadradas que tiemblan). **ALERTA sale del ojo** en un arco rojo y, al llegar, **todo el título encaja en el mismo cuadro** (3 cuadros de sobreimpulso) y el papel se abolla. **El título queda quieto ≥ 1 s.** |
-| 3,30–5,00 | **III. La suelta y la posta** | Onda de alarma desde la vigía: cada letra se aprieta y **se vuelve un queltehue** en vuelo (≈ 0,6 s). Bajan al potrero y se posan; el rojo de ALERTA se junta en **un punto: el ojo de la vigía de turno**. Todas esconden la cabeza; una queda despierta. El queltehue cierra el suyo. Nota: *«Comportamiento: cuando una ve, todas vuelan; duermen por turnos.»* **Cuadro final ≥ 0,6 s.** |
+| 0,00–0,90 | **I. La vigía y la torre** | Lámina completa (póster). **La torre se traza sola con regla** (0,10–0,72 s): mástil, celosía, tensores rectos, brazos con anemómetros que giran; aparece su rótulo «2» al pie. El queltehue levanta la cabeza con anticipación y sobreimpulso, eriza la cresta y **abre el ojo: el primer rojo** (0,80 s). |
+| 0,86–2,00 | **II. El murmullo y el clic** | ~1300 **motas del kraft se despegan** (dejan un hueco claro), giran juntas en espiral y forman SISTEMA DE / TEMPRANA / COMUNITARIO **solo como puntillado** que tiembla «en dos». **El queltehue grita** (1,40 s: pico abierto, cabeza adelante) y **ALERTA sale de su pupila** letra por letra en un arco rojo. En los 2 cuadros previos las planchas se desregistran; **en el cuadro 60 (2,00 s) todo se imprime en registro**, con sobreimpulso y **golpe de prensa** (el papel se hunde y queda la marca de plancha). |
+| 2,00–3,00 | **Lectura** | El título queda quieto 1 s (la cresta se mueve con el viento, los anemómetros giran). |
+| 3,00–5,00 | **III. La suelta y la posta** | **Onda circular desde el ojo**: cada letra se aprieta, **se parte por su eje y se abre como alas**, da un aletazo y ya es un queltehue que baja al potrero. **El rojo de ALERTA escurre** en un solo trazo de acuarela hasta **el ojo de la vigía de turno**, en primer plano (≈4,0 s). Las demás duermen (cabeza hundida, en una pata); **el queltehue por fin cierra el suyo** (4,18 s). Se escribe la nota *«Comportamiento: cuando una ve, todas vuelan; duermen por turnos.»* Cuadro final quieto 0,5 s. |
 
 ## 4. En la web
 
-* Al cargar, la animación **corre sola hasta el título** (actos I–II).
-* **El scroll maneja solo el acto III** y su reversa: al bajar, la alerta se reparte por el territorio;
-  al subir, **la bandada regresa y vuelve a formar el título**.
+* Al cargar, la animación **corre sola hasta el título** (actos I–II, cuadros 0–84).
+* **El scroll maneja solo el acto III** y su reversa (cuadros 84–149): al bajar, la alerta se reparte
+  por el territorio; al subir, **la bandada regresa y vuelve a formar el título**.
 * `<h1>` real en HTML (accesible e indexable). Versiones **16:9** (escritorio) y **4:5** (móvil).
 
 ## 5. Entregables
