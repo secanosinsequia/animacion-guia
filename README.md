@@ -11,6 +11,10 @@ de campo**. Pensada también como *hero* con efecto de scroll para la web.
 > [`output/cuando_una_ve_1920x1080.mp4`](output/cuando_una_ve_1920x1080.mp4).
 > Concepto completo y guion: [`CONCEPTO.md`](CONCEPTO.md)
 
+> **Segunda intro: «Hilván»** — una arpillera chilena animada en *stop-motion* (15 s, raster, nada
+> vectorial): todo megaproyecto empieza como un hilván, y a contraluz se ve que es un solo hilo.
+> Todo sobre ella en [`HILVAN.md`](HILVAN.md).
+
 ## La metáfora, en una línea
 
 Un **queltehue** (*Vanellus chilensis*), el centinela del campo chileno, despierta cuando en el cerro
