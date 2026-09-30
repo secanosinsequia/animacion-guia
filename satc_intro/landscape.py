@@ -70,9 +70,11 @@ def build(W, H, paper_height, seed=11, lay=None):
                         (box[0] + 0.55 * (box[2] - box[0]), hy - 40 * sy)])
     # Cerro de la torre: loma redondeada con la cima en (tx, ty)
     hill = []
+    hw = lay.get("hill_w") or 330 * sx
+    hh = lay.get("hill_h") or 118 * sy
     for u in np.linspace(-1, 1, 60):
-        x = tx + u * 330 * sx
-        y = ty + (1 - np.cos(u * np.pi / 2) ** 1.6) * 118 * sy * (1.0 if u < 0 else 0.85)
+        x = tx + u * hw
+        y = ty + (1 - np.cos(u * np.pi / 2) ** 1.6) * hh * (1.0 if u < 0 else 0.85)
         hill.append((x, y))
     hill = np.array(hill)
     hill[:, 1] += rng.normal(0, 0.6, len(hill))
@@ -111,7 +113,7 @@ def build(W, H, paper_height, seed=11, lay=None):
     # 6. Hilera de árboles (cerco vivo) entre la neblina y el potrero: copas sueltas, algunos álamos
     trees = []
     x = box[0] + 60 * sx
-    xend = tx - 300 * sx
+    xend = tx - hw * 0.9
     while x < xend:
         poplar = rng.random() < 0.22
         if poplar:

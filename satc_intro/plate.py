@@ -52,10 +52,13 @@ class Plate:
         sc, it, rm = self.f["sc"], self.f["it"], self.f["rm"]
         cap = L["head_cap"]
         yb = L["head_base"]
-        self._text(mask, sc, "GUÍA DE CAMPO DEL TERRITORIO", cap, L["margin"], yb, tracking=0.16)
         w1 = Word("LA BANDADA VIGÍA  ·  ", sc, cap, 0, 0, 0.12, "left").width
         w2 = Word("Vigilans communitas", it, cap * 1.12, 0, 0, 0.0, "left").width
-        x = W / 2 - (w1 + w2) / 2
+        if L.get("portrait"):
+            x = L["margin"]
+        else:
+            self._text(mask, sc, "GUÍA DE CAMPO DEL TERRITORIO", cap, L["margin"], yb, tracking=0.16)
+            x = W / 2 - (w1 + w2) / 2
         self._text(mask, sc, "LA BANDADA VIGÍA  ·  ", cap, x, yb, tracking=0.12)
         self._text(mask, it, "Vigilans communitas", cap * 1.12, x + w1, yb)
         self._text(mask, sc, "LÁM. I", cap, W - L["margin"], yb, tracking=0.16, anchor="right")
@@ -65,8 +68,22 @@ class Plate:
         wa = self._text(mask, rm, "1  Queltehue, ", fcap, x0, L["foot_l1"]).width
         wb = self._text(mask, it, "Vanellus chilensis", fcap * 1.05, x0 + wa, L["foot_l1"]).width
         self._text(mask, rm, ", la vigía. Voz: «quel-te-hue».", fcap, x0 + wa + wb, L["foot_l1"])
-        self._text(mask, rm, "Red Comunitaria de Alerta Energética · 2026", fcap * 0.92, W - L["margin"],
-                   L["foot_l2"], anchor="right")
+        credit = "Red Comunitaria de Alerta Energética · 2026"
+        if L.get("portrait"):
+            # En vertical, el crédito corre a lo largo del margen derecho (línea de pie de imprenta)
+            c = mask.ctx
+            c.save()
+            cw = Word(credit, rm, fcap * 0.85, 0, 0, 0.04, "left").width
+            c.translate(W - L["frame"] - 14 * self.u, L["foot_rule"] - 20 * self.u)
+            c.rotate(-np.pi / 2)
+            ww = Word(credit, rm, fcap * 0.85, 0, 0, 0.04, "left")
+            for Lt in ww.letters:
+                Lt.draw(c)
+            mask.set_alpha(0.85)
+            c.fill()
+            c.restore()
+        else:
+            self._text(mask, rm, credit, fcap * 0.92, W - L["margin"], L["foot_l2"], anchor="right")
         # Numeral 1 junto al queltehue
         n1 = L["num1"]
         self._text(mask, rm, "1", fcap * 1.3, n1[0], n1[1])
@@ -86,26 +103,27 @@ class Plate:
         return w
 
     def _huellas(self, mask):
-        u = self.u
+        u = self.u * self.lay.get("inset_scale", 1.0)
         x, y = self.lay["huellas"]
         rng = self.rng
         sc, rm, it = self.f["sc"], self.f["rm"], self.f["it"]
         fcap = self.lay["foot_cap"]
         self._text(mask, sc, "HUELLAS", fcap * 0.95, x, y, tracking=0.14)
         # Huella de queltehue: tres dedos adelante, uno mínimo atrás
-        cx, cy = x + 18 * u, y + 34 * u
+        cx, cy = x + 14 * u, y + 36 * u
         for a in (-38, 0, 38):
             r = np.deg2rad(a - 90)
-            p1 = (cx + 16 * u * np.cos(r), cy + 16 * u * np.sin(r))
+            p1 = (cx + 15 * u * np.cos(r), cy + 15 * u * np.sin(r))
             Stroke([(cx, cy), p1], 2.4 * u, rng, pool=0.5, taper=(0.1, 0.5), smooth=False).draw(mask, 10)
         Stroke([(cx, cy), (cx - 1 * u, cy + 5 * u)], 2.0 * u, rng, pool=0.4, smooth=False).draw(mask, 10)
-        self._scale_bar(mask, cx - 10 * u, cy + 14 * u, 22 * u, "5 cm")
+        self._text(mask, it, "queltehue", self.lay["foot_cap"] * 0.8, x + 32 * u, y + 30 * u)
+        self._scale_bar(mask, x + 34 * u, y + 44 * u, 20 * u, "5 cm")
         # Planta de la torre: base y tres tensores a 120°, con regla (grosor constante)
-        tx, ty = x + 108 * u, y + 30 * u
+        tx, ty = x + 150 * u, y + 34 * u
         c = mask.ctx
         c.set_line_cap(0)
         mask.set_alpha(0.92)
-        R = 20 * u
+        R = 16 * u
         for k in range(3):
             a = np.deg2rad(90 + 120 * k)
             ax, ay = tx + R * np.cos(a), ty + R * np.sin(a)
@@ -113,18 +131,17 @@ class Plate:
             c.move_to(tx, ty)
             c.line_to(ax, ay)
             c.stroke()
-            c.set_line_width(1.4 * u)
-            c.rectangle(ax - 2 * u, ay - 2 * u, 4 * u, 4 * u)
+            c.set_line_width(1.2 * u)
+            c.rectangle(ax - 1.8 * u, ay - 1.8 * u, 3.6 * u, 3.6 * u)
             c.stroke()
-        tri = [(tx + 3.5 * u * np.cos(np.deg2rad(90 + 120 * k)), ty + 3.5 * u * np.sin(np.deg2rad(90 + 120 * k)))
+        tri = [(tx + 3.2 * u * np.cos(np.deg2rad(90 + 120 * k)), ty + 3.2 * u * np.sin(np.deg2rad(90 + 120 * k)))
                for k in range(3)]
         mask.fill_poly(tri, 0.92)
-        self._scale_bar(mask, tx - 20 * u, ty + 26 * u, 40 * u, "50 m")
-        self._text(mask, it, "queltehue", fcap * 0.85, x + 36 * u, y + 30 * u)
-        self._text(mask, it, "torre", fcap * 0.85, tx + 26 * u, ty - 6 * u)
+        self._text(mask, it, "torre", self.lay["foot_cap"] * 0.8, tx + 24 * u, y + 30 * u)
+        self._scale_bar(mask, tx + 24 * u, y + 44 * u, 30 * u, "50 m")
 
     def _scale_bar(self, mask, x, y, L, label):
-        u = self.u
+        u = self.u * self.lay.get("inset_scale", 1.0)
         c = mask.ctx
         c.set_line_cap(0)
         mask.set_alpha(0.9)
@@ -141,7 +158,7 @@ class Plate:
         self._text(mask, self.f["rm"], label, self.lay["foot_cap"] * 0.7, x + L + 4 * u, y + 3 * u)
 
     def _no_confundir(self, mask):
-        u = self.u
+        u = self.u * self.lay.get("inset_scale", 1.0)
         x, y = self.lay["no_confundir"]
         sc, it, rm = self.f["sc"], self.f["it"], self.f["rm"]
         fcap = self.lay["foot_cap"]

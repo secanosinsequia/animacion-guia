@@ -52,15 +52,17 @@ def layout(W, H):
     v = H / 1350.0
     s = lambda x, y: (x * u, y * v)
     return dict(
+        portrait=True, inset_scale=0.78,
         u=u, frame=22 * u, margin=48 * u, head_base=60 * v, head_rule=76 * v, head_cap=12.5 * u,
         foot_rule=1238 * v, foot_l1=1268 * v, foot_l2=1296 * v, foot_cap=12.5 * u,
-        plate_box=(60 * u, 700 * v, 1020 * u, 1225 * v), horizon=905 * v, tower_base=s(850, 870),
-        tower_h=300 * v, meadow_top=985 * v, bird_feet=s(270, 1190), bird_size=400 * v,
-        num1=s(66, 1180), num2=s(870, 560), huellas=s(560, 1322), no_confundir=s(820, 1322),
+        plate_box=(60 * u, 700 * v, 1020 * u, 1225 * v), horizon=915 * v, tower_base=s(900, 905),
+        tower_h=285 * v, meadow_top=990 * v, bird_feet=s(270, 1190), bird_size=400 * v,
+        hill_w=300 * u, hill_h=95 * u,
+        num1=s(66, 1180), num2=s(924, 612), huellas=s(560, 1264), no_confundir=s(800, 1264),
         map_x=1000 * u, map_top=120 * v, map_bottom=380 * v,
-        title_cx=500 * u, title_w=700 * u, title_top=118 * v, title_gap=14 * v, title_small_cap=46 * v,
-        land_box=(420 * u, 1010 * v, 1000 * u, 1215 * v), land_h=(22 * v, 40 * v),
-        duty_pt=s(700, 1120), merge_pt=s(640, 760),
+        title_cx=470 * u, title_w=640 * u, title_top=122 * v, title_gap=14 * v, title_small_cap=44 * v,
+        land_box=(420 * u, 1020 * v, 1000 * u, 1215 * v), land_h=(24 * v, 44 * v),
+        duty_pt=s(730, 1190), merge_pt=s(600, 760),
         note_cx=500 * u, note_y=(330 * v, 380 * v), note_cap=26 * u,
     )
 
@@ -80,7 +82,8 @@ class Scene:
         paper, ph, lifters = make_kraft(W, H, seed=seed, lift_n=int(260 * (W * H) / (1920 * 1080)))
         self.paper, self.ph = paper, ph
         layers, geo = landscape.build(W, H, ph, seed=seed + 4, lay=dict(
-            plate_box=L["plate_box"], horizon=L["horizon"], tower_base=L["tower_base"], meadow_top=L["meadow_top"]))
+            plate_box=L["plate_box"], horizon=L["horizon"], tower_base=L["tower_base"], meadow_top=L["meadow_top"],
+            hill_w=L.get("hill_w"), hill_h=L.get("hill_h")))
         self.geo = geo
         canvas = paper.copy()
         for lyr in layers:
