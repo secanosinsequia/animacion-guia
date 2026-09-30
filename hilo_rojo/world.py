@@ -11,7 +11,7 @@ import numpy as np
 from satc_intro.color import lin
 from satc_intro.geometry import catmull_rom
 from satc_intro.noise import fbm, smooth_noise, smoothstep
-from .figures import hershey_strokes, hershey_strokes_es
+from .figures import hershey_strokes, hershey_strokes_es, needle_sprite
 from .textile import fabric, fray_mask, shade
 from .thread import Sprite, Stitch, Yarn, composite, knot, backstitch
 
@@ -282,6 +282,11 @@ class World:
         rs = np.random.default_rng(23)
         self._shots = []
         for (t0, t1, zt, ct) in self.L.get("shots", []):
+            if t1 <= t0 + 1e-6:                       # corte seco (y una imagen en que la cámara se asienta)
+                j = rs.normal(0, 1.8, 2)
+                self._shots.append((t0, t1, float(zt), np.asarray(ct, np.float64), np.array([1.0, 1.0]),
+                                    np.array([j, [0.0, 0.0]])))
+                continue
             n = max(2, int(round((t1 - t0) * 12)))
             base = np.diff(smoothstep(0, 1, np.linspace(0, 1, n + 1)))
             steps = base * rs.uniform(0.8, 1.2, n)
@@ -317,6 +322,25 @@ class World:
         d = self._dist(z)
         return dict(z=z, zw=D1 / d, zs=(D1 - Z_STRIP) / (d - Z_STRIP), c=c, jit=jit)
 
+    @staticmethod
+    def _title_recall(refs, emb_a, off, u2):
+        """Control de legibilidad del bordado: por palabra, qué fracción del trazo de la letra (rasterizado
+        con la misma fuente) queda cubierta por el hilo (dilatado 2 px de salida). Una letra que perdió su
+        punto, su tilde o su travesaño baja la cifra."""
+        cov = cv2.dilate((emb_a > 0.25).astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
+                                                                                      (int(4 * u2) | 1,) * 2))
+        out = {}
+        for st, wid in refs:                     # cada trazo por separado: un punto perdido también cuenta
+            m = np.zeros(emb_a.shape, np.uint8)
+            q_ = np.round((np.asarray(st) - np.array(off)) * 8).astype(np.int32)
+            if len(q_) == 1:
+                q_ = np.vstack([q_, q_])
+            cv2.polylines(m, [q_], False, 1, 1, cv2.LINE_8, shift=3)
+            n = int(m.sum())
+            r = int((m & cov).sum()) / max(n, 1)
+            out[wid] = min(out.get(wid, 1.0), r)
+        return [round(r, 3) for _, r in sorted(out.items())]
+
     # ------------------------------------------------------------------------------------------------
     def _title_strip(self, spec):
         """Tira de tocuyo con el título bordado (punto atrás; ALERTA en la misma lana roja), clavada a la
@@ -342,7 +366,7 @@ class World:
         dark = spec.get("color", "#2b211b")
         # medir todas las líneas y achicar lo necesario para que quepan dentro de la tira (con margen)
         inner = (x1 - x0) * 0.88
-        fnt = lambda kind: "timesr" if kind == "small" else font
+        fnt = lambda kind: "futural" if kind == "small" else font
 
         def trace(words, cap, base, k=1.0):
             ws = [(*hershey_strokes_es(txt, fnt(kind), cap * 2 * k, 0, base * 2, anchor="left", ref="H"), kind)
@@ -352,38 +376,64 @@ class World:
 
         widest = max(trace(words, cap, base)[2] for (base, cap, words) in spec["lines"])
         fit = min(1.0, inner / widest)
+        tail = []
+        refs = []                                  # (trazo, palabra): para el control de legibilidad
+        word_id = 0
+        wool_start = None
         for (base, cap, words) in spec["lines"]:
             ws, gaps, total = trace(words, cap, base, fit)
             space_list = gaps + [0.0]
             x = cx - total / 2
             for (strokes, w, kind), space in zip(ws, space_list):
+                if kind == "wool":
+                    xs_ = [float(np.mean(np.asarray(st_)[:, 0])) for st_ in strokes]
+                    cut_x = max(xs_) - 0.16 * w if xs_ else 1e9      # la última letra
                 for st in strokes:
                     st = st + np.array([x, 0.0])
                     # bordado a mano: cada trazo con su línea base, su giro y su escala
                     c_ = st.mean(axis=0)
-                    th_ = np.deg2rad(rng.normal(0, 1.4))
-                    sc_ = 1 + rng.normal(0, 0.03)
+                    th_ = np.deg2rad(rng.normal(0, 0.6))
+                    sc_ = 1 + rng.normal(0, 0.015)
                     R_ = np.array([[np.cos(th_), -np.sin(th_)], [np.sin(th_), np.cos(th_)]]) * sc_
-                    st = (st - c_) @ R_.T + c_ + np.array([0, rng.normal(0, 1.2) * u2])
+                    st = (st - c_) @ R_.T + c_ + np.array([0, rng.normal(0, 0.5) * u2])
                     if kind == "wool":
                         if len(st) < 2:
                             continue
+                        i_ = int(np.argmin(st[:, 0]))
+                        if wool_start is None or st[i_, 0] < wool_start[0]:
+                            wool_start = st[i_].copy()
+                        if float(np.mean(st[:, 0])) - x > cut_x:
+                            tail.append(st)                      # se borda al final, con la aguja
+                            continue
                         y = Yarn(st, 5.4 * u2, WOOL, rng, fuzz=0.45, step=1.0)
                         items += y.chunks
+                        refs.append((st, word_id))
+                        continue
+                    refs.append((st, word_id))
+                    capx = cap * 2 * fit
+                    size = float(max(np.ptp(st[:, 0]), np.ptp(st[:, 1])))
+                    plen = float(np.sum(np.linalg.norm(np.diff(st, axis=0), axis=1))) if len(st) > 1 else 0.0
+                    chord = float(np.hypot(*(st[-1] - st[0])))
+                    col_ = "#34281f" if kind == "small" else dark
+                    if len(st) > 2 and size < 0.3 * capx and chord < 0.35 * max(size, 1e-6):
+                        # un punto (la i): un nudito francés, del tamaño del punto de la letra
+                        items.append(knot(st.mean(axis=0), max((1.35 if kind == "small" else 2.0) * u2, 0.42 * size),
+                                          col_, rng))
+                    elif plen < 0.5 * capx and chord > 0.85 * plen:
+                        # tilde o travesaño: una sola puntada tensa (nunca se pierde)
+                        a_, b_ = st[0], st[-1]
+                        if chord < 3 * u2:
+                            d_ = (b_ - a_) / max(chord, 1e-6)
+                            a_, b_ = (a_ + b_) / 2 - d_ * 1.5 * u2, (a_ + b_) / 2 + d_ * 1.5 * u2
+                        items.append(Stitch.render(a_, b_, (2.0 if kind == "small" else 2.6) * u2, col_, rng))
                     elif kind == "small":
-                        for _, sp in backstitch(st, 3.4 * u2, 1.35 * u2, "#4a3b30", rng, jitter=0.12):
+                        for _, sp in backstitch(st, 3.0 * u2, 2.0 * u2, col_, rng, jitter=0.06):
                             items.append(sp)
                     else:
                         for _, sp in backstitch(st, 6.2 * u2, 2.5 * u2, dark, rng, jitter=0.2):
                             items.append(sp)
-                # cola de hilo al terminar algunas palabras
-                if kind != "wool" and rng.random() < 0.45 and strokes:
-                    e0 = strokes[-1][-1] + np.array([x, 0.0])
-                    tail = np.array([e0, e0 + np.array([rng.uniform(2, 5), rng.uniform(4, 8)]) * u2,
-                                     e0 + np.array([rng.uniform(-2, 6), rng.uniform(9, 15)]) * u2])
-                    items += Yarn(catmull_rom(tail, 6), (1.3 if kind == "small" else 2.2) * u2, dark, rng, fuzz=0,
-                                  kind="floss").chunks
                 x += w + space
+                word_id += 1
         # todo junto en una capa (se tuerce y se comba como una sola tela); el bordado, solo dentro de la tela
         layer_rgb = strip.rgb.copy()
         layer_a = strip.a.copy()
@@ -395,6 +445,16 @@ class World:
         inside = cv2.GaussianBlur(inside, (0, 0), 1.0)
         emb_rgb *= inside[..., None]
         emb_a *= inside
+        # la última letra de «Alerta» está dibujada a lápiz (así se marca un bordado antes de coserlo)
+        if tail:
+            pm = np.zeros(layer_a.shape, np.float32)
+            for st in tail:
+                q_ = np.round((np.asarray(st) - np.array([ox, oy])) * 8).astype(np.int32)
+                cv2.polylines(pm, [q_], False, 1.0, max(1, int(round(1.8 * u2))), cv2.LINE_AA, shift=3)
+            grain = 0.62 + 0.38 * np.random.default_rng(78).random(pm.shape).astype(np.float32)
+            pm = cv2.GaussianBlur(pm, (0, 0), 0.5) * grain * strip.a
+            layer_rgb = layer_rgb * (1 - 0.7 * pm)[..., None] + lin("#57534f")[None, None, :] * (0.7 * pm)[..., None]
+        self.title_check = self._title_recall(refs, emb_a, (ox, oy), u2)
         layer_rgb = layer_rgb * (1 - emb_a)[..., None] + emb_rgb
         layer_a = np.maximum(layer_a, emb_a)
         hgt_, wid_ = layer_a.shape
@@ -408,6 +468,19 @@ class World:
         layer_a = cv2.warpAffine(layer_a, M, (wid_, hgt_), flags=cv2.INTER_LINEAR)
         shd = cv2.warpAffine(cv2.GaussianBlur(layer_a, (0, 0), 9), np.float32([[1, 0, 13], [0, 1, 13]]), (wid_, hgt_))
         out = [Sprite(int(ox), int(oy), layer_rgb, layer_a, shd)]
+
+        def to_wall2(pts):                          # la misma comba y el mismo giro de la tira
+            q_ = np.asarray(pts, np.float64) - np.array([ox, oy])
+            sg = (1 - ((q_[:, 0] - wid_ / 2) / (wid_ / 2)) ** 2) * (q_[:, 1] / hgt_) * 6 * u2
+            q_ = np.stack([q_[:, 0], q_[:, 1] + sg, np.ones(len(q_))], 1) @ M.T
+            return q_ + np.array([ox, oy])
+
+        bad = [r for r in self.title_check if r < 0.7]
+        if bad:
+            raise ValueError(f"el título bordado no se lee bien: cobertura por palabra {self.title_check}")
+        self.title_tail = [to_wall2(st) for st in tail]
+        self.title_tail_w = 5.4 * u2
+        self.title_wool_start = to_wall2(np.array([wool_start]))[0] if wool_start is not None else None
         for (nx_, ny_) in ((x0 + 26, y0 + 22), (x1 - 26, y0 + 18)):
             out.append(knot((nx_, ny_), 7 * self.u, "#4a4440", rng))
         return out
@@ -428,7 +501,7 @@ class World:
         bx0, by0 = int(np.floor(sc[:, 0].min())) - pad, int(np.floor(sc[:, 1].min())) - pad
         bx1, by1 = int(np.ceil(sc[:, 0].max())) + pad, int(np.ceil(sc[:, 1].max())) + pad
         bx0, by0, bx1, by1 = max(0, bx0), max(0, by0), min(W, bx1), min(H, by1)
-        if bx1 <= bx0 or by1 <= by0:
+        if bx1 - bx0 < 3 or by1 - by0 < 3:                 # fuera de cuadro (o apenas una hebra)
             return None
         xs = np.arange(bx0, bx1, dtype=np.float64) + 0.5
         ys = np.arange(by0, by1, dtype=np.float64) + 0.5
@@ -513,6 +586,7 @@ class World:
                             borderMode=cv2.BORDER_REFLECT)
         Ms = np.float32([[zs / 2, 0, W / 2 - c[0] * zs], [0, zs / 2, H / 2 - c[1] * zs]])
         self._draw_sprites(bg, self.title, Ms, shadow=0.38)
+        self._Ms = Ms
         # foco: con la cámara cerca, la pared (8 cm detrás de las telas) queda algo desenfocada
         sig = 2.2 * max(0.0, cam["z"] - 1.0) * self.u
         if sig > 0.3:
@@ -648,6 +722,135 @@ class World:
                         _premult_over(fg_rgb, fg_a, ch, shadow=0.45)
                 k0 = k
 
+    def _needle_fg(self, out, dg, P, z, amF, needle_w):
+        """La aguja colgando cerca de la cámara: más grande, desenfocada y con la sombra lejana y blanda en la
+        tela; al acercarse a la tela (near → 0) se achica, se enfoca y la sombra se le junta."""
+        W, H = self.W, self.H
+        near = float(dg["near"])
+        S = lambda q_: np.asarray(q_) @ P[:, :2].T + P[:, 2]
+        e_s = S(self.main.img_to_world(dg["eye"]))
+        t_s = S(self.main.img_to_world(dg["tip"]))
+        m = 1 + 1.0 * near                               # cerca de la cámara: el doble de grande
+        c_s = (e_s + t_s) / 2
+        c_s2 = c_s + (c_s - np.array([W / 2, H / 2])) * 0.12 * near
+        e2 = c_s2 + (e_s - c_s) * m
+        t2 = c_s2 + (t_s - c_s) * m
+        w = needle_w * self.main.s * z * m
+        lift = 0.9 + 3.6 * near
+        sig = 2.8 * near * self.u * z / 1.8
+        # el hilo, desde fuera del cuadro hasta el ojo
+        top = np.array([e2[0] + 8.0, -80.0])
+        pts = catmull_rom(np.array([e2, (e2 + top) / 2 + (4.0, 0), top]), 12)
+        ww = 4.6 * self.main_u * z * self.main.s * m
+        yarn = Yarn(pts, ww, "#141516", np.random.default_rng(3), fuzz=0, kind="floss")
+        shm = np.zeros((H, W), np.float32)
+        for ch in yarn.chunks:
+            _alpha_into(shm, ch)
+        nd = needle_sprite(e2, t2, w, lift=lift)
+        u_ = self.u * z
+        off = np.array([10, 14]) * u_ * (1 + 2.2 * near)
+        shm = cv2.GaussianBlur(shm, (0, 0), (3.0 + 6 * near) * u_)
+        shm = cv2.warpAffine(shm, np.float32([[1, 0, off[0]], [0, 1, off[1]]]), (W, H))
+        out *= (1 - (0.28 - 0.1 * near) * shm * amF)[..., None]
+        composite(out, Sprite(nd.x0, nd.y0, np.zeros_like(nd.rgb), np.zeros_like(nd.a), nd.sh), shadow=0.72 - 0.25 * near)
+        for ch in yarn.chunks:
+            composite(out, _blur_sprite(Sprite(ch.x0, ch.y0, ch.rgb, ch.a, None), sig), 0.0)
+        composite(out, _blur_sprite(Sprite(nd.x0, nd.y0, nd.rgb, nd.a, None), sig), 0.0)
+
+    def _end_stitch(self, out, tq, win, cam, k):
+        """La aguja del principio vuelve, ahora con la lana roja, y borda sobre el trazo a lápiz la última
+        letra de «Alerta»; después pasa al revés de la tira y queda estacionada en el margen, clavada como en
+        un costurero, con su cabo colgando (cierra el círculo con el primer cuadro). La hebra de trabajo es
+        corta: nunca cruza el texto terminado."""
+        a, b = win
+        Ms = self._Ms
+        S = lambda q_: np.asarray(q_, np.float64) @ Ms[:, :2].T + Ms[:, 2]
+        pts = [S(st) for st in self.title_tail]
+        L = [float(np.sum(np.linalg.norm(np.diff(p_, axis=0), axis=1))) for p_ in pts]
+        tot = sum(L)
+        t_in = a + 0.25                                   # entra desde arriba a la izquierda en tres imágenes
+        f = float(np.clip((tq - t_in) / (b - t_in), 0, 1))
+        done = f * tot
+        w = self.title_tail_w * Ms[0, 0]
+        rng = np.random.default_rng(55)
+        head, head_d = None, np.array([1.0, 0.0])
+        for p_, l_ in zip(pts, L):
+            if done <= 0:
+                break
+            frac = min(1.0, done / max(l_, 1e-6))
+            q_ = _cut_path(p_, frac)
+            if len(q_) >= 2:
+                for ch in Yarn(q_, w, WOOL, rng, fuzz=0.45, step=1.0).chunks:
+                    composite(out, ch, 0.35)
+                head = q_[-1]
+                head_d = q_[-1] - q_[-2]
+            done -= l_
+        if head is None:
+            head = pts[0][0]
+        kk = int(round(tq * 12))
+        u_ = self.u * cam["zs"]
+        Ln, wn = 150 * u_, 5.4 * u_
+        th = -np.deg2rad(58 + (kk % 3) * 3)              # el ojo arriba a la derecha: tapa lo menos posible
+        v = np.array([np.cos(th), np.sin(th)])
+        eye_of = lambda e_, t_: e_ + (t_ - e_) * 0.07
+        ww = w * 0.9
+        if tq >= b and self.title_wool_start is not None:
+            # estacionada: pasó al revés (la hebra va por detrás) y asoma en el margen izquierdo
+            ws = S(self.title_wool_start)
+            g2 = int(np.floor((tq - b) * 12 + 1e-6))
+            if g2 < 1:                                        # un cuadro: se hunde al revés al final de la a
+                tip, eye = head - v * 0.35 * Ln, head + v * 0.6 * Ln
+                nd = needle_sprite(eye, tip, wn, hide_from=0.62, lift=0.6)
+                e_pt = eye_of(eye, tip)
+                for ch in Yarn(catmull_rom(np.array([head, (head + e_pt) / 2 + np.array([0, 6 * u_]), e_pt]), 10),
+                               ww, WOOL, rng, fuzz=0.6).chunks:
+                    composite(out, ch, 0.35)
+                composite(out, nd, 0.6)
+                return
+            tip = ws + np.array([-66, 18]) * u_
+            d_ = _unit2(np.array([-0.42, -0.9]))
+            eye = tip + d_ * Ln * 0.95
+            nd = needle_sprite(eye, tip, wn, hide_from=0.86, lift=0.8)
+            sw = np.sin((tq - b) * 2 * np.pi / 1.7) * 2.5 * u_
+            e_pt = eye_of(eye, tip)
+            # la hebra: del ojo baja en un bucle y entra a la tela junto a la aguja; el cabo cuelga del ojo
+            enter = tip - d_ * 0.12 * Ln + np.array([9, -4]) * u_
+            loop = catmull_rom(np.array([e_pt, e_pt + np.array([16 + sw, 34]) * u_,
+                                         enter + np.array([6, -14]) * u_, enter]), 10)
+            tail = catmull_rom(np.array([e_pt, e_pt + np.array([-7 + sw, 16]) * u_,
+                                         e_pt + np.array([-10 + 1.5 * sw, 30]) * u_]), 8)
+            for pth in (loop, tail):
+                for ch in Yarn(pth, ww, WOOL, rng, fuzz=0.6).chunks:
+                    composite(out, ch, 0.35)
+            composite(out, nd, 0.6)
+            return
+        if tq < t_in:                  # entra por la pared, entre la arpillera y la tira, sin pasar sobre el texto
+            i_ = int(np.floor((tq - a) * 12 + 1e-6))
+            g = (i_ + 1) / 3.5
+            rect = self.L["title"]["rect"]
+            sl = S(np.array([2 * rect[0], 2 * rect[1]]))
+            start = np.array([sl[0] - 260 * u_, sl[1] - 40 * u_])
+            goal = head + np.array([-10, -22]) * u_
+            tip = start + (goal - start) * g
+            eye = tip - _unit2(goal - start) * Ln          # el ojo va detrás de la punta
+            inside = False
+        else:
+            inside = (kk % 2 == 0) and f < 1
+            if inside:
+                tip, eye = head - v * 0.15 * Ln, head + v * 0.7 * Ln
+            else:
+                tip = head + _unit2(head_d) * 12 * u_ + np.array([0, -4 * u_])
+                eye = tip + v * Ln
+        nd = needle_sprite(eye, tip, wn, hide_from=0.82 if inside else None, lift=0.8)
+        e_pt = eye_of(eye, tip)
+        # hebra de trabajo corta: de la última puntada al ojo, y un cabo que cuelga del ojo
+        mid = (head + e_pt) / 2 + np.array([0, 10 * u_])
+        for pth in (catmull_rom(np.array([head, mid, e_pt]), 10),
+                    catmull_rom(np.array([e_pt, e_pt + np.array([-5, 14]) * u_, e_pt + np.array([-6, 26]) * u_]), 8)):
+            for ch in Yarn(pth, ww, WOOL, rng, fuzz=0.6).chunks:
+                composite(out, ch, 0.35)
+        composite(out, nd, 0.6)
+
     def _front_wraps(self, fg_rgb, fg_a, P, z, tau):
         """La punta del frente rojo: vueltas de lana enrolladas en espiral sobre el cordel."""
         if tau is None or self.knot_x is None:
@@ -732,7 +935,7 @@ class World:
         return np.broadcast_to(f[None, :, None], (self.H, W, 1)).astype(np.float32)
 
     def render_at(self, main_lin, tq, T, F=1.0, B=0.0, lamp=None, flick=0.0, wool_tied=False, dangle=None, k=0,
-                  glow=None, alpha=None):
+                  glow=None, alpha=None, focus=None, needle_w=11.0):
         """Compone el cuadro completo en el instante tq. main_lin: la arpillera con luz de frente plena;
         glow: su resplandor a contraluz (o None); alpha: su silueta (con el frunce) o None."""
         W, H = self.W, self.H
@@ -759,6 +962,15 @@ class World:
             if alpha is not None:
                 amF = np.zeros((H, W), np.float32)
                 amF[y0:y1, x0:x1] = self._sample(alpha, wpm)
+        if not dynamic:
+            rb = np.random.default_rng(7000 + k)
+            pm = np.mean([hg_ @ P[:, :2].T + P[:, 2] for hg_ in self.main.pin_pts], axis=0)
+            Mb = cv2.getRotationMatrix2D((float(pm[0]), float(pm[1])), float(rb.normal(0, 0.03)), 1.0)
+            Mb[:, 2] += rb.normal(0, 0.3, 2)
+            mrgb = cv2.warpAffine(mrgb, Mb, (W, H), flags=cv2.INTER_LINEAR)
+            amF = cv2.warpAffine(amF, Mb, (W, H), flags=cv2.INTER_LINEAR)
+            if mglow is not None:
+                mglow = cv2.warpAffine(mglow, Mb, (W, H), flags=cv2.INTER_LINEAR)
         items = []
         for (hg, r_, a_, wp_) in st["lays"]:
             pr = self.nb_progress(hg, tau)
@@ -799,6 +1011,11 @@ class World:
         if B > 0 and lamp is not None:
             if isinstance(lamp, str):
                 fld = amF
+            elif "hand" in lamp:
+                lw = self.main.img_to_world(lamp["hand"])
+                lsx, lsy = lw @ P[:, :2].T + P[:, 2]
+                R = lamp["R"] * self.main.s * z
+                fld = amF * (0.5 + np.exp(-((self.xx - lsx) ** 2 + (self.yy - lsy) ** 2) / (2 * R * R)))
             elif "band" in lamp:
                 lw = self.main.img_to_world((lamp["band"] * self.main.iw, self.main.ih / 2))
                 lsx = float((lw @ P[:, :2].T + P[:, 2])[0])
@@ -844,25 +1061,35 @@ class World:
                     _premult_over(fg_rgb, fg_a, spr, shadow=0.5)
         out *= (1 - fg_a)[..., None]
         out += fg_rgb * Ff
-        # antes de coser: el hilo de la aguja baja desde fuera del cuadro (con su sombra en la tela)
+        # antes de coser: la aguja cuelga de su hilo cerca de la cámara (grande, desenfocada, con su sombra
+        # lejana en la tela) y se acerca a la tela
         if dangle is not None:
-            S = lambda q_: np.asarray(q_) @ P[:, :2].T + P[:, 2]
-            e_s = S(self.main.img_to_world(dangle["eye"]))
-            t_s = S(self.main.img_to_world(dangle["top"]))
-            if t_s[1] < -20:
-                t_s = np.array([t_s[0], -60.0])
-            pts = catmull_rom(np.array([e_s, (e_s + t_s) / 2 + (3.0, 0), t_s]), 12)
-            w = 4.4 * self.main_u * z * self.main.s
-            y = Yarn(pts, w, "#141516", np.random.default_rng(3), fuzz=0, kind="floss")
-            shm = np.zeros((H, W), np.float32)
-            for ch in y.chunks:
-                _alpha_into(shm, ch)
-            u_ = self.u * z
-            shm = cv2.GaussianBlur(shm, (0, 0), 3.2 * u_)
-            shm = cv2.warpAffine(shm, np.float32([[1, 0, 10 * u_], [0, 1, 14 * u_]]), (W, H))
-            out *= (1 - 0.28 * shm * amF)[..., None]
-            for ch in y.chunks:
-                composite(out, ch, 0.0)
+            self._needle_fg(out, dangle, P, z, amF, needle_w)
+        if T.get("end_stitch") and tq >= T["end_stitch"][0] and getattr(self, "title_tail", None):
+            self._end_stitch(out, tq, T["end_stitch"], cam, k)
+        zr = z / float(self.L["z0"])
+        if zr > 1.15:
+            yf = H / 2
+            if focus is not None:
+                yf = float((self.main.img_to_world(focus) @ P[:, :2].T + P[:, 2])[1])
+            dm = smoothstep(0.14 * H, 0.52 * H, np.abs(self.yy[:, :1] - yf)) * float(np.clip((zr - 1.15) / 0.4, 0, 1))
+            if dm.max() > 0.01:
+                bl = cv2.GaussianBlur(out, (0, 0), 3.4 * self.u)
+                dm = dm[..., None]
+                out = out * (1 - dm) + bl * dm
+        # desenfoque de movimiento (obturador abierto mientras la cámara se desplaza)
+        prev = self.camera(tq - 1 / 12)
+        if abs(prev["z"] - z) < 0.02 * z:
+            dpx = (np.asarray(prev["c"]) - np.asarray(c)) * z
+            mag = float(np.hypot(*dpx))
+            if mag > 40:
+                n_ = int(min(12, mag * 0.5 / 6)) + 2
+                acc = np.zeros_like(out)
+                for i_ in range(n_):
+                    f_ = (i_ / (n_ - 1) - 0.5) * 0.5
+                    acc += cv2.warpAffine(out, np.float32([[1, 0, dpx[0] * f_], [0, 1, dpx[1] * f_]]), (W, H),
+                                          borderMode=cv2.BORDER_REFLECT)
+                out = acc / n_
         # luz de la sala (una ventana a la izquierda), viñeta, parpadeo, grano y el leve bamboleo de película
         out *= (self.rake * self.vign * (1 + flick))[..., None]
         out *= (1 + 0.012 * self.grain[k % len(self.grain)])[..., None]
@@ -874,6 +1101,20 @@ class World:
         return np.clip(out, 0, 1)
 
 
+def _blur_sprite(sp, sig):
+    if sig < 0.3:
+        return sp
+    pad = int(3 * sig) + 2
+    rgb = cv2.copyMakeBorder(sp.rgb, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    a = cv2.copyMakeBorder(sp.a, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    rgb = cv2.GaussianBlur(rgb, (0, 0), sig)
+    a = cv2.GaussianBlur(a, (0, 0), sig)
+    sh = None
+    if sp.sh is not None:
+        sh = cv2.copyMakeBorder(sp.sh, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    return Sprite(sp.x0 - pad, sp.y0 - pad, rgb, a, sh)
+
+
 def _alpha_into(m, sp):
     H, W = m.shape
     h, w = sp.a.shape
@@ -883,6 +1124,11 @@ def _alpha_into(m, sp):
         return
     sl = (slice(cy0 - y0, cy1 - y0), slice(cx0 - x0, cx1 - x0))
     m[cy0:cy1, cx0:cx1] = np.maximum(m[cy0:cy1, cx0:cx1], sp.a[sl])
+
+
+def _unit2(v):
+    v = np.asarray(v, np.float64)
+    return v / (np.linalg.norm(v) + 1e-9)
 
 
 def _cut_path(pts, frac):

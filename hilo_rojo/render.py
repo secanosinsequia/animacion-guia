@@ -50,10 +50,11 @@ def render_frames(W, H, frames_dir, workers=None, only=None):
     print(f"{len(jobs)} imágenes en {time.time() - t1:.1f}s", flush=True)
 
 
-def encode(frames_dir, out, crf=17, all_intra=False, preset="slow", width=None):
-    """Cada imagen única dura dos cuadros a 24 fps (animación «en dos»)."""
+def encode(frames_dir, out, crf=17, all_intra=False, preset="slow", width=None, fps=FPS):
+    """Cada imagen única dura dos cuadros a 24 fps (animación «en dos»). Para el scroll basta con las
+    imágenes únicas (fps=12): cada una es un cuadro clave y el archivo pesa la mitad."""
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    vf = [f"fps={FPS}"]
+    vf = [f"fps={fps}"]
     if width:
         vf.append(f"scale={int(width)}:-2:flags=lanczos")
     cmd = [ffmpeg_bin(), "-y", "-loglevel", "error", "-framerate", str(UFPS), "-i",
@@ -97,6 +98,7 @@ def main(argv=None):
     ap.add_argument("--web-quality", type=int, default=74)
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--crf", type=int, default=17)
+    ap.add_argument("--scroll-crf", type=int, default=None)
     ap.add_argument("--skip-render", action="store_true")
     a = ap.parse_args(argv)
     W, H = [int(v) for v in a.size.lower().split("x")]
@@ -106,7 +108,8 @@ def main(argv=None):
     if a.out:
         encode(frames_dir, a.out, crf=a.crf)
     if a.scroll_out:
-        encode(frames_dir, a.scroll_out, crf=a.crf + 7, all_intra=True, preset="medium", width=a.scroll_width)
+        encode(frames_dir, a.scroll_out, crf=a.scroll_crf or a.crf + 7, all_intra=True, preset="medium",
+               width=a.scroll_width, fps=UFPS)
     if a.web_dir:
         export_web_frames(frames_dir, a.web_dir, a.web_width, quality=a.web_quality)
 

@@ -78,6 +78,7 @@ LAND = dict(
     stakes=[(0.575 + 0.034 * k, 0.800 + 0.007 * k) for k in range(4)],
     intake=((0.292, 0.622), (0.262, 0.652)),
     andes=(0.47, [(0.10, 0.305, 0.09), (0.27, 0.262, 0.12), (0.47, 0.315, 0.09), (0.63, 0.27, 0.11), (0.88, 0.315, 0.1)]),
+    back_line=[(0.635, 0.575), (0.465, 0.70), (0.295, 0.80), (0.125, 0.91)],
     araucarias=[(0.385, 0.505, 108), (0.425, 0.518, 88)],
 )
 TALL = dict(
@@ -109,6 +110,7 @@ TALL = dict(
     stakes=[(0.545 + 0.055 * k, 0.725 + 0.005 * k) for k in range(4)],
     intake=((0.345, 0.620), (0.300, 0.635)),
     andes=(0.30, [(0.14, 0.205, 0.15), (0.46, 0.17, 0.17), (0.82, 0.195, 0.15)]),
+    back_line=[(0.585, 0.43), (0.43, 0.575), (0.285, 0.715), (0.14, 0.86)],
     araucarias=[(0.37, 0.335, 96), (0.455, 0.345, 80)],
 )
 
@@ -327,6 +329,7 @@ def build(W, H, seed=11):
     info["W"], info["H"] = W, H
     info["stakes"] = [np.array(P(*p)) for p in Lz["stakes"]]
     info["intake"] = (np.array(P(*Lz["intake"][0])), np.array(P(*Lz["intake"][1])))
+    info["back_line"] = [np.array(P(*p)) for p in Lz["back_line"]]
     return canvas, T, info
 
 
@@ -375,14 +378,18 @@ def _border(canvas, W, H, u, rng, color="#c98f2c"):
 
 
 def _lattice_tower(spr, base, hgt, u, rng, col="#141516"):
-    """Torre de alta tensión en punto atrás de hilo sintético negro."""
+    """Torre de alta tensión hilvanada (puntadas largas con huecos): también es un proyecto."""
+    _spr = spr
+
+    def spr(sp_or_seg):
+        _spr(sp_or_seg)
     bx, by = base
     wb, wt = hgt * 0.22, hgt * 0.06
     top = by - hgt
     L = [(bx - wb / 2, by), (bx - wt / 2, top + hgt * 0.18)]
     R = [(bx + wb / 2, by), (bx + wt / 2, top + hgt * 0.18)]
     for a, b in (L, R):
-        spr(Stitch.render(a, b, 2.4 * u, col, rng, kind="synthetic"))
+        _hilvan_seg(_spr, a, b, 2.4 * u, col, rng, u)
     n = 5
     for i in range(n):
         f0, f1 = i / n, (i + 1) / n
@@ -390,19 +397,28 @@ def _lattice_tower(spr, base, hgt, u, rng, col="#141516"):
         yl1 = by - (hgt * 0.82) * f1
         w0 = wb / 2 + (wt / 2 - wb / 2) * f0
         w1 = wb / 2 + (wt / 2 - wb / 2) * f1
-        spr(Stitch.render((bx - w0, yl0), (bx + w1, yl1), 1.5 * u, col, rng, kind="synthetic"))
-        spr(Stitch.render((bx + w0, yl0), (bx - w1, yl1), 1.5 * u, col, rng, kind="synthetic"))
+        _hilvan_seg(_spr, (bx - w0, yl0), (bx + w1, yl1), 1.5 * u, col, rng, u)
+        _hilvan_seg(_spr, (bx + w0, yl0), (bx - w1, yl1), 1.5 * u, col, rng, u)
     for fy, fw in ((0.82, 0.30), (0.95, 0.22)):
         y = by - hgt * fy
-        spr(Stitch.render((bx - hgt * fw, y), (bx + hgt * fw, y), 2.2 * u, col, rng, kind="synthetic"))
-    spr(Stitch.render((bx - wt / 2, top + hgt * 0.18), (bx, top), 2.0 * u, col, rng, kind="synthetic"))
-    spr(Stitch.render((bx + wt / 2, top + hgt * 0.18), (bx, top), 2.0 * u, col, rng, kind="synthetic"))
+        _hilvan_seg(_spr, (bx - hgt * fw, y), (bx + hgt * fw, y), 2.2 * u, col, rng, u)
+    _hilvan_seg(_spr, (bx - wt / 2, top + hgt * 0.18), (bx, top), 2.0 * u, col, rng, u)
+    _hilvan_seg(_spr, (bx + wt / 2, top + hgt * 0.18), (bx, top), 2.0 * u, col, rng, u)
     return [(bx - hgt * 0.30, by - hgt * 0.82), (bx + hgt * 0.30, by - hgt * 0.82)]
+
+
+def _hilvan_seg(spr, a, b, w, col, rng, u):
+    a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
+    L = float(np.hypot(*(b - a)))
+    n = max(1, int(round(L / (16 * u))))
+    for k in range(n):
+        f0, f1 = k / n, (k + 0.7) / n
+        spr(Stitch.render(a + (b - a) * f0, a + (b - a) * f1, w, col, rng, kind="synthetic"))
 
 
 def _cable(spr, a, b, sag, u, rng):
     pts = catmull_rom(np.array([a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + sag), b]), 12)
-    for _, sp in running_stitch(pts, 26 * u, 2 * u, 1.3 * u, "#141516", rng, jitter=0.2, kind="synthetic"):
+    for _, sp in running_stitch(pts, 18 * u, 8 * u, 1.3 * u, "#141516", rng, jitter=0.2, kind="synthetic"):
         spr(sp)
 
 
@@ -451,6 +467,9 @@ def build_desert(W, H, seed=31):
         pw, ph = X(0.07) * (1 + 0.15 * row), Y(0.04) * (1 + 0.15 * row)
         x = X(0.30) - row * X(0.02)
         while x + pw < X(0.96):
+            if row >= 2 and x + pw > X(0.53) and x < X(0.81):     # ahí vive una familia: no hay paneles
+                x += pw * 1.25
+                continue
             poly = [(x, y), (x + pw, y), (x + pw * 1.08, y + ph), (x + pw * 0.08, y + ph)]
             bake(Piece(poly, "#2c3a52", rng, kind="plain", stitch=None, fabric_scale=u * 0.7, margin=6))
             for k in (1, 2):
@@ -464,15 +483,15 @@ def build_desert(W, H, seed=31):
     _cable(spr, arms[0][1], arms[1][0], 14 * u, u, rng)
     _cable(spr, arms[1][1], (W - m, Y(0.40)), 18 * u, u, rng)
     _cable(spr, (m, Y(0.44)), arms[0][0], 18 * u, u, rng)
-    parts, wins, door = house(X(0.24), Y(0.93), 110 * u, 96 * u, rng, 0, wall="#d9a96c", roof="#8b5e3c",
+    parts, wins, door = house(X(0.62), Y(0.93), 110 * u, 96 * u, rng, 0, wall="#d9a96c", roof="#8b5e3c",
                               wall_kind="plain", roof_kind="cord", u=u)
     for p_ in parts:
         bake(p_)
     lit = [sp for w_ in wins for _, sp in w_]
-    dd = doll(X(0.33), Y(0.97), 150 * u, rng, 0, dress="#6d3b7a", dress_kind="dots", dress2="#efe2c6",
+    dd = doll(X(0.74), Y(0.97), 150 * u, rng, 0, dress="#6d3b7a", dress_kind="dots", dress2="#efe2c6",
               skin="#b07a55", hair="#1d1612", u=u)
     _bake_doll(dd, canvas, T)
-    y = _red_line(canvas, [door, (X(0.40), Y(0.86)), (X(0.62), Y(0.64)), (X(0.66), Y(0.30)), (X(0.70), -20)], u, rng)
+    y = _red_line(canvas, [door, (X(0.70), Y(0.80)), (X(0.78), Y(0.58)), (X(0.74), Y(0.30)), (X(0.76), -20)], u, rng)
     _border(canvas, W, H, u, rng, color="#2f5a8a")
     return dict(img=canvas, exit=exit_points(y.pts[::-1], u), red=y, lit=lit)
 

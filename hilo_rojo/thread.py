@@ -353,6 +353,10 @@ def running_stitch(path, stitch, gap, w, color, rng, jitter=0.6, kind="floss", c
     pts = resample(pts, 1.0)
     arc = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))])
     out = []
+    if arc[-1] < stitch * 1.1:                       # trazo corto (el travesaño de la t): una sola puntada
+        p0 = pts[0] + rng.normal(0, jitter * 0.5, 2)
+        p1 = pts[-1] + rng.normal(0, jitter * 0.5, 2)
+        return [(0.0, Stitch.render(p0, p1, w, color, rng, kind=kind))]
     s = rng.uniform(0, gap)
     while s + stitch < arc[-1]:
         a = int(np.searchsorted(arc, s))
@@ -362,6 +366,9 @@ def running_stitch(path, stitch, gap, w, color, rng, jitter=0.6, kind="floss", c
         p1 = pts[b] + rng.normal(0, jitter * 1.6, 2)
         out.append((s, Stitch.render(p0, p1, w * rng.uniform(0.88, 1.12), color, rng, kind=kind)))
         s += stitch + gap * rng.uniform(0.65, 1.4)
+    if gap < 1.5 and arc[-1] - s > stitch * 0.3:      # el pespunte llega al final (la o cierra)
+        a = int(np.searchsorted(arc, s))
+        out.append((s, Stitch.render(pts[min(a, len(pts) - 1)], pts[-1], w, color, rng, kind=kind)))
     return out
 
 

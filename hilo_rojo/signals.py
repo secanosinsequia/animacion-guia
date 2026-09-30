@@ -133,13 +133,14 @@ def build_signals(info, u, rng, T0):
     R_ = 15 * u
     ring = catmull_rom(np.array([vc + R_ * np.array([np.cos(a_), np.sin(a_)]) for a_ in
                                  np.linspace(0, 2 * np.pi, 13)]), 4)
-    for ch in Yarn(ring, 4.4 * u, "#b42a1e", rng, fuzz=0.2, kind="floss").chunks:
+    # (de fierro, no rojo: un círculo rojo con rayos se lee como «prohibido»)
+    for ch in Yarn(ring, 4.6 * u, "#4d5a63", rng, fuzz=0.15, kind="floss").chunks:
         extra.append((t0 + 0.12, ch, 2))
-    for k in range(4):
-        a_ = np.pi / 4 + k * np.pi / 2
-        extra.append((t0 + 0.12, Stitch.render(vc, vc + R_ * np.array([np.cos(a_), np.sin(a_)]), 2.8 * u, "#8e1f16", rng,
-                                               kind="floss", hole=False, bow=0), 2))
-    extra.append((t0 + 0.12, knot(vc, 4.2 * u, "#6e1a12", rng), 2))
+    for k in range(5):
+        a_ = np.pi / 2 + k * 2 * np.pi / 5
+        extra.append((t0 + 0.12, Stitch.render(vc, vc + R_ * np.array([np.cos(a_), np.sin(a_)]), 2.8 * u, "#3a454d", rng,
+                                               kind="synthetic", hole=False, bow=0), 2))
+    extra.append((t0 + 0.12, knot(vc, 4.2 * u, "#2c3439", rng), 2))
     # vástago de la llave (une el volante con la cañería)
     extra.append((t0 + 0.1, Stitch.render(vc + nv * 1 * u, vc - nv * 0 * u + tv * 0, 4 * u, "#5d6266", rng,
                                           kind="floss", hole=False, bow=0), 2))

@@ -1,21 +1,22 @@
 """«Hilván»: línea de tiempo (16,95 s, 24 fps animados en dos = 12 imágenes únicas por segundo).
 
 Conocer   0,0–1,2    póster: la arpillera cuelga de un cordel de cáñamo; una aguja grande, enhebrada con
-                     hilo negro, cuelga desde fuera del cuadro y se mece; baja a coser (algo llega)
-Vigilar   1,2–4,6    la cámara se acerca: la aguja hilvana las señales tempranas —estacas de topógrafo,
-                     un AVISO prendido con alfiler de gancho, una cañería con su llave de paso que sale
-                     del río—; la cámara se aleja y la aguja hilvana en el cerro la torre de alta tensión,
-                     solo como contorno (lo que vendría); tira del hilo y la tela se frunce
+                     hilo negro, cuelga cerca de la cámara (desenfocada) y se mece; baja a coser
+Vigilar   1,2–4,6    corte a un primer plano quieto: la aguja hilvana las señales tempranas —estacas de
+                     topógrafo, un AVISO prendido con alfiler de gancho, una cañería con su llave de paso
+                     que sale del río—; corte al plano general: hilvana en el cerro la torre de alta
+                     tensión, solo como contorno (lo que vendría); tira del hilo y la tela se frunce
 Alertar   4,65–7,9   baja la luz de la sala; una luz cálida pasa por detrás, de izquierda a derecha, y
-                     aparece por el revés un solo hilo que une todas las señales; toda la tela es
-                     linterna (se lee el saco: HARINA); se abre la cortina y vuelve el día
-Responder 7,95–12,75 una vecina tiende la lana roja: marca el hilo por delante y la lleva de casa en
-                     casa (se enciende cada ventana y su gente apunta al cerro); pausa; la cámara se
-                     acerca: la vecina tira del hilván y la torre se descose puntada a puntada hacia su
-                     ovillo (quedan los agujeros); la lana sube y se anuda al cordel
+                     enciende los agujeros; una lámpara de mano ilumina todo el revés: un solo hilo une
+                     las señales y detrás de la torre aparece toda la línea de torres proyectada (se lee
+                     el saco: HARINA); clic, se apaga la lámpara y se prende el tubo de la sala
+Responder 7,95–12,75 una vecina marca cada señal con una cruz de lana roja y la lleva de casa en casa (se
+                     enciende cada ventana y su gente apunta al cerro); pausa; corte: la vecina tira del
+                     hilván y la torre se descose puntada a puntada hacia su ovillo (quedan los agujeros);
+                     la lana sube y se anuda al cordel
 Red       12,25–16,95 la cámara se aleja por pasos: el cordel sostiene otras arpilleras; desde el nudo, el
                      rojo corre por el cordel, baja a cada vecina y enciende su ventana; ellas se mecen.
-                     La tira del título, en la pared
+                     En la tira del título, la aguja del comienzo borda la «a» final de «Alerta»
 """
 import cv2
 import numpy as np
@@ -26,7 +27,7 @@ from satc_intro.noise import smooth_noise, smoothstep
 from . import territory
 from .figures import needle_sprite, doll, doll_layer
 from .signals import build_signals
-from .thread import Sprite, Yarn, composite, composite_T, knot
+from .thread import Sprite, Stitch, Yarn, composite, composite_T, knot
 from .world import World
 
 FPS = 24
@@ -34,8 +35,9 @@ UFPS = 12
 DURATION = 16.95
 
 T = dict(hook=(0.92, 1.17), stakes=(1.17, 1.8), notice=(1.85, 2.4), intake=(2.45, 2.98), pylon=(3.3, 3.95),
-         taut=(4.0, 4.6), dim=(4.65, 4.9), sweep=(4.9, 6.25), full=(6.25, 7.45), curtain=(7.45, 7.87),
-         wool=(7.95, 9.85), pull=(10.55, 11.95), rise=(12.25, 12.75), dolly=(12.25, 13.75), front=(13.85, 15.15))
+         taut=(4.0, 4.6), dim=(4.65, 4.9), sweep=(4.9, 6.25), full=(6.25, 7.5), curtain=(7.5, 7.92),
+         marks=(7.95, 8.42), wool=(8.42, 9.85), pull=(10.7, 12.1), rise=(12.25, 12.75), dolly=(12.25, 13.75),
+         front=(13.85, 15.15), end_stitch=(15.2, 16.25))
 BLK = "#141516"
 WOOL = "#c3241c"
 
@@ -113,7 +115,7 @@ class Scene:
         self.tower_holes = [self._hole(p, np.random.default_rng(int(p[0] * 13 + p[1])), faint=True)
                             for p in self._tower_hole_pts()]
         # luz y grano
-        self.flick = np.random.default_rng(seed + 99).normal(0, 0.009, 400)
+        self.flick = np.random.default_rng(seed + 99).normal(0, 0.013, 400)
         yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
         self.yy, self.xx = yy, xx
         self.lamp = np.array([1.0, 0.88, 0.72], np.float32)        # luz de tarde, cálida
@@ -143,46 +145,88 @@ class Scene:
         core = np.clip(R * 0.6 * wob - d + 0.5, 0, 1)
         rim = np.clip(1 - np.abs(d - R * 1.15 * wob) / (0.8 * u), 0, 1)
         lit = np.clip((dx * 0.64 + dy * 0.56) / (d + 1e-3), 0, 1)
-        k = 0.34 if faint else 1.0
-        a = np.clip((core * 0.85 + rim * (0.22 + 0.32 * lit)) * k, 0, 1).astype(np.float32)
-        rgb = (lin("#1e150e")[None, None, :] * core[..., None] * 0.85
-               + lin("#efe4cf")[None, None, :] * (rim * (0.22 + 0.32 * lit))[..., None]) * k
+        k = 0.55 if faint else 1.0
+        kr = 1.15 if faint else 1.0                                     # el anillo algo más marcado
+        a = np.clip((core * 0.8 + rim * (0.22 + 0.32 * lit) * kr) * k, 0, 1).astype(np.float32)
+        hole_col = lin("#d9ccb4") if faint else lin("#1e150e")        # por el agujero se ve la pared, clara
+        rgb = (hole_col[None, None, :] * core[..., None] * 0.8
+               + lin("#3a2e22")[None, None, :] * (rim * (0.22 + 0.32 * lit) * kr)[..., None]) * k
         return Sprite(x0, y0, rgb.astype(np.float32), a, None)
 
     def _back_mask(self, rng):
-        """El hilo del revés: una sola hebra gruesa (≈7 px) con holgura entre huella y huella, grosor que
-        cambia al torcerse y un halo corto (más borroso donde se separa de la tela)."""
+        """El revés: una sola hebra gruesa (≈7 px) con holgura que une las señales hasta la torre del cerro,
+        y desde ahí todo el proyecto hilvanado por detrás: una fila de torres que baja cruzando el valle,
+        por encima de las casas y del río, con su cable. Solo se ve a contraluz."""
         W, H, u = self.W, self.H, self.u
-        pts = []
-        for a, b in zip(self.back_path[:-1], self.back_path[1:]):
+        core = np.zeros((H, W), np.float32)
+        loose = np.zeros((H, W), np.float32)
+
+        def stroke(pts, r0, rr=0.4, farness=None):
+            pts = resample(np.asarray(pts, np.float64), 1.5)
+            n = len(pts)
+            if n < 2:
+                return
+            rad = r0 * (1 - rr / 2 + rr * smooth_noise((1, n), 25, rng)[0])
+            far = smooth_noise((1, n), 60, rng)[0] if farness is None else np.full(n, farness)
+            for (x, y), r, f in zip(pts, rad, far):
+                cv2.circle(core, (int(x * 4), int(y * 4)), max(1, int(r * 4)), float(1 - 0.5 * f), -1, cv2.LINE_AA,
+                           shift=2)
+                cv2.circle(loose, (int(x * 4), int(y * 4)), max(1, int(r * 4)), float(f), -1, cv2.LINE_AA, shift=2)
+
+        def sag(a, b, k=0.012):
             a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
             L = float(np.hypot(*(b - a)))
             nrm = np.array([-(b - a)[1], (b - a)[0]]) / (L + 1e-9)
-            mid = (a + b) / 2 + nrm * L * 0.02 * rng.choice([-1, 1]) + np.array([0, L * 0.012])
-            seg = catmull_rom(np.array([a, mid, b]), 30)
-            pts.append(seg if not pts else seg[1:])
-        pts = resample(np.vstack(pts), 1.5)
-        n = len(pts)
-        rad = 3.6 * u * (0.8 + 0.4 * smooth_noise((1, n), 25, rng)[0])
-        far = smooth_noise((1, n), 60, rng)[0]
-        core = np.zeros((H, W), np.float32)
-        loose = np.zeros((H, W), np.float32)
-        for (x, y), r, f in zip(pts, rad, far):
-            cv2.circle(core, (int(x * 4), int(y * 4)), int(r * 4), float(1 - 0.5 * f), -1, cv2.LINE_AA, shift=2)
-            cv2.circle(loose, (int(x * 4), int(y * 4)), int(r * 4), float(f), -1, cv2.LINE_AA, shift=2)
+            mid = (a + b) / 2 + nrm * L * 0.02 * rng.choice([-1, 1]) + np.array([0, L * k])
+            return catmull_rom(np.array([a, mid, b]), 30)
+
+        for a, b in zip(self.back_path[:-1], self.back_path[1:]):
+            stroke(sag(a, b), 3.6 * u)
+        # la línea de torres proyectada
+        hgt = 200 * u
+        tops = [np.asarray(self.pylon_top, np.float64)]
+        arms = [(tops[0] - (hgt * 0.34, -hgt * 0.26), tops[0] + (hgt * 0.34, hgt * 0.26))]
+        for base in self.info["back_line"]:
+            bx, by = base
+            wb, wt = hgt * 0.24, hgt * 0.07
+            waist = by - hgt * 0.72
+            top = np.array([bx, by - hgt])
+            legs = [((bx - wb / 2, by), (bx - wt / 2, waist)), ((bx + wb / 2, by), (bx + wt / 2, waist)),
+                    ((bx - wt / 2, waist), (bx, top[1])), ((bx + wt / 2, waist), (bx, top[1])),
+                    ((bx - wb / 2, by), (bx + wb * 0.2, by - hgt * 0.36)), ((bx + wb / 2, by), (bx - wb * 0.2, by - hgt * 0.36)),
+                    ((bx - hgt * 0.3, by - hgt * 0.8), (bx + hgt * 0.3, by - hgt * 0.8))]
+            for (p0, p1) in legs:
+                stroke(np.array([p0, p1]), 2.7 * u, farness=0.25)
+            tops.append(top)
+            arms.append((np.array([bx - hgt * 0.3, by - hgt * 0.8]), np.array([bx + hgt * 0.3, by - hgt * 0.8])))
+        for (a0, a1), (b0, b1) in zip(arms[:-1], arms[1:]):
+            for pa, pb in ((a0, b0), (a1, b1)):
+                stroke(sag(pa, pb, 0.05), 2.0 * u, rr=0.25)
         core = cv2.GaussianBlur(np.clip(core, 0, 1), (0, 0), 0.6 * u)
         halo = cv2.GaussianBlur(np.clip(loose, 0, 1), (0, 0), 3.2 * u)
+        self.back_core, self.back_halo = np.clip(core * 1.25, 0, 1), np.clip(halo * 0.6, 0, 1)
         return np.clip(core * 1.25 + halo * 0.6, 0, 1)
 
     def _pinholes(self):
+        """Pinchazos chicos e irregulares; tres variantes de brillo que se turnan (la luz de mano titila)."""
         u = self.u
-        m = np.zeros((self.H, self.W), np.float32)
+        rg = np.random.default_rng(17)
+        holes = []
         for it in self.hilvan:
             if np.hypot(*(it[3] - it[2])) < 7 * u:          # las letras del aviso no: serían una mancha
                 continue
             for p in (it[2], it[3]):
-                cv2.circle(m, (int(p[0] * 4), int(p[1] * 4)), max(1, int(1.5 * u * 4)), 1.0, -1, cv2.LINE_AA, shift=2)
-        return np.clip(cv2.GaussianBlur(m, (0, 0), 0.9 * u) * 1.4, 0, 1)
+                ax = rg.uniform(0.6, 1.3) * u
+                holes.append((p, ax, ax * rg.uniform(0.5, 1.0), rg.uniform(0, 180), rg.uniform(0.35, 0.85)))
+        self.pin_var = []
+        for v in range(3):
+            m = np.zeros((self.H, self.W), np.float32)
+            for (p, ax, ay, ang, b) in holes:
+                bb = float(np.clip(b * rg.uniform(0.6, 1.25), 0, 1))
+                cv2.ellipse(m, (int(p[0] * 4), int(p[1] * 4)), (max(1, int(ax * 4)), max(1, int(ay * 4))),
+                            float(ang), 0, 360, bb, -1, cv2.LINE_AA, shift=2)
+            self.pin_var.append(np.clip(cv2.GaussianBlur(m, (0, 0), 0.6 * u), 0, 1))
+        return self.pin_var[0]
 
     # ------------------------------------------------------------------------------------------------
     def _pucker_prepare(self, segs, pins):
@@ -207,7 +251,7 @@ class Scene:
             e = qx * n[0] + qy * n[1]
             wob = (smooth_noise(s_.shape, 40 * u, rngp) - 0.5)
             wob2 = (smooth_noise(s_.shape, 90 * u, rngp) - 0.5)
-            g = (np.exp(-(e / (82 * u * (1 + 0.3 * wob))) ** 2) * smoothstep(-26 * u, 34 * u, s_)
+            g = (np.exp(-(e / (58 * u * (1 + 0.3 * wob))) ** 2) * smoothstep(-26 * u, 34 * u, s_)
                  * smoothstep(L + 26 * u, L - 34 * u, s_))
             beyond = np.maximum(np.maximum(-s_, s_ - L), 0)
             side = np.clip((s_ - L / 2) / (L / 2), -1, 1)
@@ -217,7 +261,7 @@ class Scene:
             # el estampado se arrastra de verdad: compresión en los pliegues y ondulación lateral
             ds = (g * 0.2 * (np.clip(s_, 0, L) - L / 2) + gather / 2 * tug * (1 - g)
                   + g * 1.05 * lam / (2 * np.pi) * np.sin(ph))
-            de = g * (0.06 * e + 3.2 * u * np.cos(ph) * (0.6 + 0.4 * wob2))
+            de = g * (0.06 * e + 1.8 * u * np.cos(ph) * (0.6 + 0.4 * wob2))
             # los extremos se ladean hacia el hilo (las casas se inclinan)
             de = de + 1.5 * u * np.abs(tug) * np.clip(e / (120 * u), -1, 1) * side
             DX += ds * t[0] + de * n[0]
@@ -233,7 +277,7 @@ class Scene:
             dx, dy = xx - p[0], yy - p[1]
             r = np.hypot(dx, dy) + 1e-3
             th = np.arctan2(dy, dx)
-            R = 90 * u
+            R = 70 * u
             gr = np.exp(-r / R) * smoothstep(3 * u, 14 * u, r)
             ph = 7 * th + 1.3 * np.sin(r / (22 * u))
             rad = -0.16 * r * gr                                  # la tela se recoge hacia el punto
@@ -296,7 +340,7 @@ class Scene:
         hands = (np.array([sp["fx"] + tside * h * 0.28, neck + h * 0.04]),
                  np.array([sp["fx"] + tside * h * 0.33, neck + h * 0.12]))
         self.pull_hand = (hands[0] + hands[1]) / 2
-        self.dolls[k]["pull"] = [doll_layer(mk_spec(sp, hands=hands), lean=-tside * ln) for ln in (0.06, 0.12, 0.16)]
+        self.dolls[k]["pull"] = [doll_layer(mk_spec(sp, hands=hands), lean=-tside * ln) for ln in (0.07, 0.15, 0.22)]
         self.ball_pt = np.array([sp["fx"] - tside * h * 0.24, sp["base"] - 6 * self.u])
 
     def _draw_dolls(self, img, tq, Tm=None):
@@ -306,41 +350,53 @@ class Scene:
         for i, d in enumerate(self.dolls):
             lay = d["rest"]
             if i == self.vigia:
-                if w0 <= tq < p0:
+                if T["marks"][0] <= tq < p0:
                     lay = d["hold"]
                 elif p0 <= tq < p1:
                     kk = int(round((tq - p0) * UFPS))
-                    lay = d["pull"][(0, 1, 2, 1)[kk % 4]]      # tira, recoge, tira...
+                    lay = d["pull"][0] if kk < 3 else d["pull"][(1, 2, 2, 1)[kk % 4]]   # se afirma, y tira
             else:
                 tl = lit_t.get(d["house"])
                 if tl is not None and tq >= tl:
                     lay = d["point"]
-            composite(img, lay, shadow=0)
+            composite(img, lay, shadow=0.5)
             if Tm is not None:
                 composite_T(Tm, lay)
 
     # ------------------------------------------------------------------------------------------------
     def _wool_prepare(self, rng):
-        """La lana roja: sale de la mano de la vigía (su casa ya está encendida: ella vio), marca las señales
-        (estacas, aviso, cañería), da la vuelta al campo de casa en casa y sube por el borde derecho hacia el
-        cordel. Una sola vuelta, sin cruzarse."""
+        """La vigía responde: primero marca cada señal con una cruz de lana roja (el aviso, las estacas, la
+        cañería); después lleva la lana de su mano a cada casa (roja, azul, blanca), cada vez más rápido, y
+        al final la lana sube por el borde derecho hacia el cordel."""
         u, W, H = self.u, self.W, self.H
         hs = self.info["houses"]
         doors = [np.asarray(h["door"]) for h in hs]
         stakes = self.info["stakes"]
         own, order = 2, [0, 1, 3]                             # amarilla (la de la vigía); roja, azul, blanca
-        # las estacas se marcan en el orden que no hace cruzarse a la lana consigo misma
-        tail = [self.notice_c + (30 * u, 64 * u), self.notice_c + (-20 * u, 66 * u), self.H4 + (8 * u, 30 * u)]
-        opts = [[stakes[-1] + (6 * u, 16 * u), stakes[0] + (-4 * u, 16 * u)],
-                [stakes[0] + (-4 * u, 16 * u), stakes[-1] + (6 * u, 16 * u)]]
-        best = min(opts, key=lambda o: _crossings([self.hold_hand] + o + tail))
-        way = [self.hold_hand] + best
-        way += [self.notice_c + (30 * u, 64 * u), self.notice_c + (-20 * u, 66 * u)]
-        way += [self.H4 + (8 * u, 30 * u)]
-        keys = [("stakes", 2), ("notice", 4), ("intake", 5)]
+        # cruces rojas sobre las señales
+        m0, m1 = T["marks"]
+        spots = [self.notice_c + (26 * u, 20 * u), np.mean(np.array(stakes), axis=0) + (0, 26 * u),
+                 self.H4 + (-50 * u, 6 * u)]
+        self.marks = []
+        for j, c in enumerate(spots):
+            c = np.asarray(c, np.float64)
+            r_ = 9 * u
+            sp1 = Stitch.render(c + (-r_, -r_), c + (r_, r_), 5.2 * u, WOOL, rng, kind="wool")
+            sp2 = Stitch.render(c + (r_, -r_), c + (-r_, r_), 5.2 * u, WOOL, rng, kind="wool")
+            self.marks.append((m0 + (m1 - m0) * (j + 0.6) / 3, [sp1, sp2], c))
+        # la lana de casa en casa
+        way = [self.hold_hand]
         for i in order:
             way += [doors[i] + (0, 26 * u)]
-            keys.append((i, len(way) - 1))
+        # la lana no pasa por encima del aviso: si un tramo lo cruza, lo rodea por debajo
+        nc = np.asarray(self.notice_c, np.float64)
+        for j in range(len(way) - 1):
+            a_, b_ = np.asarray(way[j], np.float64), np.asarray(way[j + 1], np.float64)
+            d_ = b_ - a_
+            t_ = float(np.clip(np.dot(nc - a_, d_) / max(np.dot(d_, d_), 1e-9), 0, 1))
+            if np.hypot(*(a_ + d_ * t_ - nc)) < 60 * u and 0.05 < t_ < 0.95:
+                way.insert(j + 1, nc + np.array([0.0, 62 * u]))
+                break
         ex = 0.962 * W
         last = doors[order[-1]]
         rise = [np.array([(last[0] + ex) / 2, last[1] - 30 * u]), np.array([ex, last[1] - 160 * u]),
@@ -348,17 +404,15 @@ class Scene:
         path = _wobbly(way + rise, rng, 6 * u, 3.0 * u)
         self.wool = Yarn(path, 8.5 * u, WOOL, rng, couch_every=19 * u, couch_color="#8e160f", fuzz=1.0)
         arc_at = lambda p: float(self.wool.arc[int(np.argmin(np.linalg.norm(self.wool.pts - p, axis=1)))])
-        Lk = {name: arc_at(way[j]) for name, j in keys}
+        Lk = {i: arc_at(doors[i] + (0, 26 * u)) for i in order}
         self.L_end_houses = Lk[order[-1]]
         a, b = T["wool"]
-        # horario: marcar las señales (lento) y luego el relevo, cada vez más rápido
-        times = [a, a + 0.34, a + 0.62, a + 0.9, a + 1.26, a + 1.6, b]
-        names = ["start", "stakes", "notice", "intake"] + order
-        lens = [0.0] + [Lk[n] for n in names[1:]]
+        times = [a, a + 0.55, a + 1.0, b]                    # cada tramo más rápido
+        lens = [0.0] + [Lk[i] for i in order]
         r0, r1 = T["rise"]
         self.wool_sched = list(zip(times, lens)) + [(r0, self.L_end_houses), (r1, self.wool.length)]
-        self.house_times = {i: t_ for i, t_ in zip(order, times[4:])}
-        self.house_times[own] = a
+        self.house_times = {i: t_ for i, t_ in zip(order, times[1:])}
+        self.house_times[own] = m0
 
     def wool_len(self, tq):
         sc = self.wool_sched
@@ -373,6 +427,15 @@ class Scene:
         a, b = T["wool"]
         r0, r1 = T["rise"]
         return (a <= tq < b) or (r0 <= tq < r1)
+
+    def mark_active(self, tq):
+        m0, m1 = T["marks"]
+        if not (m0 <= tq < m1):
+            return None
+        for (tt, sps, c) in self.marks:
+            if tq < tt + 1e-6:
+                return c
+        return self.marks[-1][2]
 
     def house_lit(self, tq):
         return {i: tq >= t_ - 1e-6 for i, t_ in self.house_times.items()}
@@ -433,31 +496,29 @@ class Scene:
         return img
 
     def dangle(self, tq):
-        """La aguja antes de coser: cuelga de su hilo desde fuera del cuadro y se mece; en tres imágenes
-        baja en diagonal a la primera puntada mientras el hilo se desliza con ella. Devuelve
-        dict(eye, tip, top) en coordenadas de la tela (top: de dónde viene el hilo) o None."""
+        """La aguja antes de coser, colgando de su hilo desde fuera del cuadro, cerca de la cámara (grande y
+        desenfocada) y meciéndose; en tres imágenes se acerca a la tela, sobre la primera estaca, y ahí se
+        corta al primer plano. Devuelve dict(eye, tip, near) en coordenadas de la tela, o None."""
         h0, h1 = T["hook"]
         if tq >= h1 - 1e-6:
             return None
         u = self.u
         k = int(round(tq * UFPS))
-        dx = 150 * u if not self.portrait else 250 * u
+        dx = 150 * u if not self.portrait else 60 * u
         base_eye = self.first_stitch + np.array([dx, -330 * u])
         if tq < h0 - 1e-6:
             sway = np.sin(k / UFPS * 2 * np.pi / 1.4) * 24 * u
             eye = base_eye + np.array([sway, 0])
             ang = np.sin(k / UFPS * 2 * np.pi / 1.4 + 0.9) * 0.07
             tip = eye + np.array([np.sin(ang), np.cos(ang)]) * 300 * u
-            top = np.array([eye[0] + 6 * u, -0.5 * self.H])
-            return dict(eye=eye, tip=tip, top=top)
+            return dict(eye=eye, tip=tip, near=1.0)
         i = int(round((tq - h0) * UFPS))
-        f = (0.28, 0.63, 0.88)[min(i, 2)]
+        f = (0.35, 0.75, 1.0)[min(i, 2)]
         end_tip = self.first_stitch + np.array([-4 * u, 6 * u])
         end_eye = end_tip + _unit(np.array([0.6, -0.8])) * 300 * u
         eye = base_eye + (end_eye - base_eye) * f
         tip = (base_eye + np.array([0, 300 * u])) + (end_tip - (base_eye + np.array([0, 300 * u]))) * f
-        top = np.array([base_eye[0] + 6 * u, -0.5 * self.H]) * (1 - f) + self.first_stitch * f
-        return dict(eye=eye, tip=tip, top=top)
+        return dict(eye=eye, tip=tip, near=float(1 - f) * 0.85)
 
     def _needle_layers(self, tq, img):
         """La aguja y su hilo en este instante: lista de sprites (el hilo primero). Hunde la tela al entrar."""
@@ -469,8 +530,7 @@ class Scene:
         eye_of = lambda eye, tip: eye + (tip - eye) * 0.07
         dg = self.dangle(tq)
         if dg is not None:
-            out.append(needle_sprite(dg["eye"], dg["tip"], 11 * u, lift=0.9))
-            return out, dg["tip"]
+            return out, dg["tip"]                   # la dibuja el mundo, en primer plano
         h0, h1 = T["stakes"][0], T["pylon"][1]
         if h0 <= tq < h1:
             last = nxt = None
@@ -513,6 +573,23 @@ class Scene:
             out += self._thread(self.last_stitch, eye, 3.0 * u, BLK, rj, sag=0.0)
             out.append(needle_sprite(eye, tip, wn, lift=1.6))
             return out, self.last_stitch
+        mc = self.mark_active(tq)
+        if mc is not None:
+            inside = (k % 2 == 0)
+            th = np.deg2rad(58 + rj.normal(0, 4))
+            v = np.array([np.cos(th), np.sin(th)])
+            Lw, ww = 220 * u, 8.8 * u
+            if inside:
+                tip, eye = mc - v * 0.17 * Lw, mc + v * 0.69 * Lw
+                nd = needle_sprite(eye, tip, ww, hide_from=0.8, lift=0.6)
+                self._dimple(img, mc, 8 * u)
+            else:
+                tip = mc + np.array([12 * u, -8 * u])
+                eye = tip + v * Lw
+                nd = needle_sprite(eye, tip, ww, lift=1.3)
+            out += self._thread(mc, eye_of(eye, tip), 8.0 * u, WOOL, rj, sag=0.16, kind="wool")
+            out.append(nd)
+            return out, mc
         if self.wool_active(tq):
             p, d = self.wool.head(self.wool_len(tq))
             inside = (k % 2 == 0)
@@ -550,22 +627,44 @@ class Scene:
         if tq < s1:                                    # una luz cálida cruza por detrás, de izq. a der.
             f = (tq - s0) / (s1 - s0)
             return FMIN, 1.0, dict(band=-0.12 + 1.24 * f)
-        if tq < f1:                                    # toda la tela es linterna
+        if tq < f1:                                    # toda la tela es linterna; la luz es de mano: se mueve
             i = int(round((tq - f0) * UFPS))
-            return FMIN, (0.75, 1.0)[min(i, 1)], "full"
-        if tq < c1:                                    # se abre la cortina: vuelve el día desde la izquierda
-            f = (tq - c0) / (c1 - c0)
-            return dict(curtain=float(f), fmin=FMIN), float(1 - smoothstep(0.2, 1.0, f)), "full"
+            rw = np.random.default_rng(300 + i)
+            cx = 0.5 + 0.16 * np.sin(1.1 * (tq - f0) + 0.4) + rw.normal(0, 0.012)
+            cy = 0.45 + 0.1 * np.cos(1.7 * (tq - f0)) + rw.normal(0, 0.012)
+            return FMIN, (0.75, 1.0)[min(i, 1)], dict(hand=(cx * self.W, cy * self.H), R=0.42 * max(self.W, self.H))
+        if tq < c1:                                    # se apaga la lámpara (clic) y se prende la luz de la sala
+            i = int(round((tq - c0) * UFPS))
+            return (FMIN * 0.7, 0.55, 0.3, 0.85, 1.0)[min(i, 4)], 0.0, None
         return 1.0, 0.0, None
 
     def pull_state(self, tq):
         """Cuántas puntadas de la torre ya salieron (de la última cosida a la primera)."""
         p0, p1 = T["pull"]
         n = len(self.tower_idx)
-        if tq < p0:
+        if tq < p0 + 0.25:                           # primero toma el hilo y se afirma
             return 0
-        f = np.clip((tq - p0 - 0.15) / (p1 - p0 - 0.3), 0, 1)
-        return int(round(n * f))
+        f = np.clip((tq - p0 - 0.25) / (p1 - p0 - 0.4), 0, 1)
+        return int(round(n * f ** 0.85))
+
+    def _tug(self, img, p, toward, k):
+        """La tela da un tironcito donde salta la puntada: se estira hacia la mano que tira."""
+        u = self.u
+        R = 26 * u
+        x0, y0 = int(max(0, p[0] - 2 * R)), int(max(0, p[1] - 2 * R))
+        x1, y1 = int(min(self.W, p[0] + 2 * R)), int(min(self.H, p[1] + 2 * R))
+        if x1 - x0 < 4 or y1 - y0 < 4:
+            return img
+        yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float32)
+        d = _unit(np.asarray(toward, np.float64) - p)
+        g = np.exp(-((xx - p[0]) ** 2 + (yy - p[1]) ** 2) / (2 * (R * 0.55) ** 2)).astype(np.float32)
+        amp = 3.2 * u * (0.7 + 0.3 * (k % 2))
+        reg = np.ascontiguousarray(img[y0:y1, x0:x1])
+        img[y0:y1, x0:x1] = cv2.remap(reg, (xx - x0 - d[0] * amp * g).astype(np.float32),
+                                      (yy - y0 - d[1] * amp * g).astype(np.float32), cv2.INTER_LINEAR,
+                                      borderMode=cv2.BORDER_REFLECT)
+        img[y0:y1, x0:x1] *= (1 - 0.12 * g)[..., None]
+        return img
 
     def pucker_amount(self, tq):
         a, b = T["taut"]
@@ -573,8 +672,9 @@ class Scene:
             return 0.0
         if tq < b:
             return float(smoothstep(a + 0.08, b - 0.3, tq))
-        gone = self.pull_state(tq)
-        return float(1.0 - 0.74 * gone / max(1, len(self.tower_idx)))
+        # la tela se suelta a tirones (no de a poco): cada tanto salta una puntada que sostenía el frunce
+        f = self.pull_state(tq) / max(1, len(self.tower_idx))
+        return float(1.0 - 0.8 * np.floor(f * 5 + 1e-6) / 5)
 
     # ------------------------------------------------------------------------------------------------
     def arpillera(self, t):
@@ -588,32 +688,55 @@ class Scene:
         self._smoke(img, tq)
         gone = self.pull_state(tq)
         removed = set(self.tower_idx[::-1][:gone])
+        # frunce: la tela (y la silueta: el ruedo sube); lo cosido encima se corre con ella, sin deformarse
+        A = self.pucker_amount(tq)
+        alpha = self.world.ea_main.copy() if hasattr(self, "world") else None
+        img, Tm, alpha = self._pucker(img, Tm, A, alpha)
+
+        def off(c):
+            if A <= 0.001:
+                return 0, 0
+            x_, y_ = int(np.clip(c[0], 0, self.W - 1)), int(np.clip(c[1], 0, self.H - 1))
+            return int(round(-A * self.pk["DX"][y_, x_])), int(round(-A * self.pk["DY"][y_, x_]))
+
+        # lo que es una sola pieza rígida se corre entero: el aviso (papel, letras, alfiler) y la cañería
+        # con su llave; si cada puntada se corriera por su cuenta, la A del aviso se cruzaría en una X
+        anchor = {1: self.notice_c, 2: self.H4}
+        off_h = lambda h, c: off(anchor[h]) if h in anchor else off(c)
+
         if gone:
             for hs_ in self.tower_holes:
                 composite(img, hs_, shadow=0)
         for (tt, pc, h) in self.sig_pieces:
             if tq + 1e-6 >= tt:
+                dx, dy = off_h(h, pc.center)
                 if tq < tt + 1 / UFPS - 1e-6:
                     pc.draw(img, tq)
                 else:
-                    pc.bake(img, Tm)
+                    composite(img, pc.sprite, pc.shadow_k, dx=dx, dy=dy)
+                    composite_T(Tm, pc.sprite, dx=dx, dy=dy)
         for (tt, sp, h) in self.extra:
             if tq + 1e-6 >= tt:
-                composite(img, sp, shadow=0.5)
-                composite_T(Tm, sp)
+                dx, dy = off_h(h, (sp.x0 + sp.a.shape[1] / 2, sp.y0 + sp.a.shape[0] / 2))
+                composite(img, sp, shadow=0.5, dx=dx, dy=dy)
+                composite_T(Tm, sp, dx=dx, dy=dy)
         for i, it in enumerate(self.hilvan):
             if it[0] <= tq + 1e-6 and i not in removed:
-                composite(img, it[1], shadow=0.55)
-                composite_T(Tm, it[1])
+                dx, dy = off_h(it[4], (it[2] + it[3]) / 2)
+                composite(img, it[1], shadow=0.55, dx=dx, dy=dy)
+                composite_T(Tm, it[1], dx=dx, dy=dy)
+        for (tt, sps, c) in getattr(self, "marks", []):
+            if tq + 1e-6 >= tt:
+                dx, dy = off(c)
+                for sp in sps:
+                    composite(img, sp, shadow=0.5, dx=dx, dy=dy)
+                    composite_T(Tm, sp, dx=dx, dy=dy)
         # el cabo del hilo tras la torre (cortado), mientras la torre siga cosida
         if T["taut"][1] - 0.2 <= tq and gone == 0:
             rj = np.random.default_rng(5)
             for sp in self._thread(self.last_stitch, self.last_stitch + np.array([30, 46]) * u, 3.0 * u, BLK, rj,
                                    sag=0.05):
                 composite(img, sp, 0.5)
-        # frunce (también deforma la silueta: el ruedo sube)
-        alpha = self.world.ea_main.copy() if hasattr(self, "world") else None
-        img, Tm, alpha = self._pucker(img, Tm, self.pucker_amount(tq), alpha)
         # lana roja
         L = self.wool_len(tq)
         if L > 0:
@@ -632,9 +755,12 @@ class Scene:
             n = len(self.tower_idx)
             if gone < n and tq < p1:
                 nxt = self.hilvan[self.tower_idx[::-1][gone]][3]
-                for sp in self._thread(self.pull_hand, nxt, 3.0 * u, BLK, rj, sag=0.06):
+                if gone > 0:
+                    img = self._tug(img, nxt, self.pull_hand, k)
+                for sp in self._thread(self.pull_hand, nxt, 3.0 * u, BLK, rj,
+                                       sag=(0.2 if not gone else (0.03, 0.14)[k % 2])):
                     composite(img, sp, 0.5)
-            r_ball = (6 + 13 * min(1.0, gone / max(1, n))) * u
+            r_ball = (7 + 20 * min(1.0, gone / max(1, n)) ** 0.8) * u
             ang = np.linspace(0, 2 * np.pi * 6, 120)
             rr = r_ball * (0.5 + 0.5 * np.abs(np.sin(ang * 0.37)))
             ball = np.stack([self.ball_pt[0] + rr * np.cos(ang + np.sin(ang * 0.21)),
@@ -654,6 +780,7 @@ class Scene:
             img = self._boil(img, act, k)
         elif p0 <= tq < p1:
             img = self._boil(img, self.pull_hand, k)
+        self.focus = act if act is not None else (self.pull_hand if p0 <= tq < p1 else None)
         # luz
         F, B, lamp = self.light(tq)
         glow = None
@@ -662,6 +789,17 @@ class Scene:
             Te = np.maximum(Te, (self.pinholes * 0.75)[..., None] * (1 - 0.5 * self.back_mask)[..., None])
             if isinstance(lamp, str):
                 field, gain = np.float32(1.0), 11.0
+            elif "hand" in lamp:
+                c, R = lamp["hand"], lamp["R"]
+                field = (0.55 + 0.6 * np.exp(-((self.xx - c[0]) ** 2 + (self.yy - c[1]) ** 2) / (2 * R * R)))[..., None]
+                gain = 10.0
+                # la sombra blanda del hilo (a un milímetro de la tela) se corre al revés de la luz
+                sx = -(c[0] - self.W / 2) * 0.006
+                sy = -(c[1] - self.H / 2) * 0.006
+                halo = cv2.warpAffine(self.back_halo, np.float32([[1, 0, sx], [0, 1, sy]]), (self.W, self.H))
+                Te = Tm * (1 - 0.96 * np.clip(self.back_core + halo, 0, 1))[..., None]
+                Te = np.maximum(Te, (self.pin_var[k % 3] * 0.75)[..., None]
+                                * (1 - 0.5 * self.back_mask)[..., None])
             elif "band" in lamp:
                 xc = lamp["band"] * self.W
                 wb = 0.2 * self.W
@@ -686,7 +824,8 @@ class Scene:
         k = int(round(tq * UFPS))
         return self.world.render_at(img, tq, T, F=F, B=B, lamp=lamp, flick=float(self.flick[k % len(self.flick)]),
                                     wool_tied=tq >= T["rise"][1] - 1e-6, dangle=self.dangle(tq), k=k,
-                                    glow=glow, alpha=alpha)
+                                    glow=glow, alpha=alpha, focus=getattr(self, "focus", None),
+                                    needle_w=11 * self.u)
 
     def frame_srgb8(self, t):
         return (linear_to_srgb(self.frame(t)) * 255 + 0.5).astype(np.uint8)
@@ -712,24 +851,25 @@ def layout_for(W, H, sc):
     nb_u = [min(s_) / 1080 for s_ in nb]
     sub = [("Guía para comunidades ante megaproyectos de energía", "small")]
     if land:
-        main_x = (F(440), F(1480))
-        z0 = 1.66
-        title = dict(rect=tuple(F(v) for v in (600, 840, 1320, 1044)), font="timesi", lines=[
-            (F(904), F(38), [("Sistema", "floss"), ("de", "floss"), ("Alerta", "wool")]),
-            (F(962), F(38), [("Temprana", "floss"), ("Comunitario", "floss")]),
-            (F(1008), F(19), sub)])
+        main_x = (F(480), F(1440))
+        z0 = 1.8
+        title = dict(rect=tuple(F(v) for v in (610, 790, 1310, 1012)), font="timesi", lines=[
+            (F(840), F(33), [("Sistema", "floss"), ("de", "floss")]),
+            (F(887), F(33), [("Alerta", "wool"), ("Temprana", "floss")]),
+            (F(934), F(33), [("Comunitario", "floss")]),
+            (F(978), F(22), sub)])
         line = (F(960), F(150), 0.000028 / f)
-        nbx = [(F(-190), F(380)), (F(1540), F(2110))]
+        nbx = [(F(-150), F(420)), (F(1500), F(2070))]
     else:
-        main_x = (F(270), F(810))
-        z0 = 1.9
-        title = dict(rect=tuple(F(v) for v in (150, 1415, 930, 1705)), font="timesi", lines=[
-            (F(1482), F(40), [("Sistema", "floss"), ("de", "floss")]),
-            (F(1544), F(40), [("Alerta", "wool"), ("Temprana", "floss")]),
-            (F(1606), F(40), [("Comunitario", "floss")]),
-            (F(1660), F(19), sub)])
-        line = (F(540), F(330), 0.000026 / f)
-        nbx = [(F(-250), F(220)), (F(860), F(1330))]
+        main_x = (F(280), F(800))
+        z0 = 1.97
+        title = dict(rect=tuple(F(v) for v in (130, 1290, 950, 1640)), font="timesi", lines=[
+            (F(1370), F(46), [("Sistema", "floss"), ("de", "floss")]),
+            (F(1442), F(46), [("Alerta", "wool"), ("Temprana", "floss")]),
+            (F(1514), F(46), [("Comunitario", "floss")]),
+            (F(1580), F(22), sub)])
+        line = (F(540), F(222), 0.000026 / f)
+        nbx = [(F(-190), F(250)), (F(830), F(1270))]
     L = dict(line=line, main=dict(size=(sc.W, sc.H), x=main_x),
              neighbors=[dict(img=des["img"], x=nbx[0], exit=des["exit"], wool_w=8.0 * nb_u[0], red=des["red"],
                              lit=des["lit"]),
@@ -749,15 +889,25 @@ def layout_for(W, H, sc):
         cy_ = float(np.clip(c[1], min(hy, sc.H / 2), max(sc.H - hy, sc.H / 2)))
         return ("img", (cx_, cy_))
 
-    zs = z0 * 1.75
-    c_st = np.mean(np.array(sc.info["stakes"]), axis=0) - (0, 30 * sc.u)
-    c_no = sc.notice_c + (0, 20 * sc.u)
-    c_in = sc.H4 + (-40 * sc.u, 10 * sc.u)
+    # un solo primer plano para las tres señales (estacas, aviso, cañería): la cámara no salta de una a
+    # otra, se queda y se arrima muy despacio; la aguja se ve ir de una a otra
+    sig_pts = np.array(list(sc.info["stakes"]) + [sc.notice_c, sc.H2, sc.H3, sc.H4], np.float64)
+    lo, hi = sig_pts.min(axis=0), sig_pts.max(axis=0)
+    c_v = (lo + hi) / 2 + np.array([30.0, 40.0]) * sc.u
+    span_v = (hi - lo) + np.array([2 * 200.0, 2 * 170.0]) * sc.u
+    zv = z0 * float(np.clip(min(W / (span_v[0] * s_img * z0), H / (span_v[1] * s_img * z0)), 1.3, 1.75))
     ph = sc.pull_hand
     c_pu = (ph + sc.H1 - (0, 100 * sc.u)) / 2
     span = np.abs(ph - (sc.H1 - (0, 200 * sc.u))) + 260 * sc.u
     zp = z0 * float(np.clip(min(W / (span[0] * s_img * z0), H / (span[1] * s_img * z0)), 1.0, 1.6))
-    L["shots"] = [(1.0, 1.35, zs, clamp(c_st, zs)), (1.8, 2.02, zs, clamp(c_no, zs)),
-                  (2.42, 2.64, zs, clamp(c_in, zs)), (2.98, 3.32, z0, "c0"),
-                  (10.15, 10.45, zp, clamp(c_pu, zp)), (T["dolly"][0], T["dolly"][1], 1.0, "final")]
+    c_to = sc.pylon_top + (0, 120 * sc.u)
+    zl = z0 * 1.32
+    L["shots"] = [(1.17, 1.17, zv, clamp(c_v, zv)),                  # corte al primer plano de las señales
+                  (1.3, 2.8, zv * 1.05, clamp(c_v + np.array([24.0, 12.0]) * sc.u, zv * 1.05)),   # se arrima
+                  (3.0, 3.0, z0, "c0"),                               # corte al plano general
+                  (6.3, 7.42, zl, clamp(c_to, zl)),                   # acercamiento lento a la constelación
+                  (7.5, 7.5, z0, "c0"),                               # (clic) vuelve el plano general
+                  (10.45, 10.45, zp, clamp(c_pu, zp)),                # corte: la vigía y la torre
+                  (10.8, 12.1, zp * 1.08, clamp(c_pu, zp * 1.08)),    # se acerca un poco mientras descose
+                  (T["dolly"][0], T["dolly"][1], 1.0, "final")]
     return L

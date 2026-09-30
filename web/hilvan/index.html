@@ -144,7 +144,7 @@
 <section class="hero" id="hero" aria-labelledby="titulo">
   <div class="hero__sticky">
     <canvas id="arpillera" role="img"
-            aria-label="Una arpillera chilena cuelga de un cordel de cáñamo: un valle de retazos con la cordillera, río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro estacas de topógrafo, un aviso, una cañería que sale del río y el contorno de una torre de alta tensión; al tensar el hilo, la tela se frunce. A contraluz se ve el revés: es un solo hilo. Una vecina lo marca con lana roja y avisa casa por casa; luego tira del hilván y la torre se descose. La lana sube al cordel y el rojo corre hasta las arpilleras de otros territorios, que encienden sus ventanas: una red de alerta."></canvas>
+            aria-label="Una arpillera chilena cuelga de un cordel de cáñamo: un valle de retazos con la cordillera, río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro estacas de topógrafo, un aviso prendido al cerco, una cañería con su llave de paso que sale del río y el contorno de una torre de alta tensión; al tensar el hilo, la tela se frunce. Se apaga la sala y una lámpara ilumina el revés: es un solo hilo, y detrás de la torre viene toda una línea de torres cruzando el valle. Una vecina marca cada señal con una cruz de lana roja y lleva la lana casa por casa; se encienden las ventanas y la gente apunta al cerro. Luego tira del hilván y la torre se descose puntada a puntada. La lana sube al cordel, el rojo corre hasta las arpilleras de otros territorios y enciende sus ventanas, y la aguja del comienzo borda la última letra de «Alerta» en la tira del título."></canvas>
     <ol class="stops" aria-live="polite">
       <li class="stop stop--title" data-t0="0" data-t1="1.17">
         <p class="stop__k">Guía SATC · Conocer</p>
@@ -163,11 +163,12 @@
       </li>
       <li class="stop" data-t0="4.62" data-t1="7.9">
         <p class="stop__k">Alertar</p>
-        <p>A contraluz aparece el revés: no eran señales sueltas. <em>Es un solo hilo.</em></p>
+        <p>A contraluz aparece el revés: no eran señales sueltas. <em>Es un solo hilo</em>, y detrás de la torre
+           viene toda una línea.</p>
       </li>
       <li class="stop" data-t0="7.9" data-t1="10.2">
         <p class="stop__k">Responder</p>
-        <p>Una vecina lo marca con lana roja y avisa casa por casa.</p>
+        <p>Una vecina marca cada señal con lana roja y avisa casa por casa.</p>
       </li>
       <li class="stop" data-t0="10.2" data-t1="12.25">
         <p class="stop__k">Responder</p>
@@ -228,7 +229,7 @@
     tall:      { dir: "frames/tall/",      w: 9,  h: 16 },
   };
   // scroll (en alturas de pantalla) -> tiempo (s): con descansos donde se lee cada parada
-  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.4, 6.25], [4.95, 7.45],
+  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.4, 6.25], [4.95, 7.5],
                 [5.25, 7.9], [6.5, 10.2], [7.3, 12.0], [7.5, 12.25], [8.2, 13.75], [8.8, 15.2], [9.1, 16.95]];
   const STOPS_T = [1.17, 3.3, 4.62, 7.9, 10.2, 12.25];   // nudos del hilo de avance
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;

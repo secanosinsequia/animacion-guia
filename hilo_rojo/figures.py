@@ -129,11 +129,15 @@ def needle_sprite(back, tip, width, hide_from=None, lift=1.0):
     if hide_from is not None:
         a = a * np.clip((hide_from - s) * L / 1.5 + 0.5, 0, 1)
     dz = np.clip(e / np.maximum(r, 1e-3), -1, 1)
-    spec = np.exp(-((dz + 0.38) / 0.20) ** 2) * 1.05 + np.exp(-((dz - 0.55) / 0.28) ** 2) * 0.18
-    base = 0.22 + 0.30 * (1 - np.abs(dz))
-    val = np.clip(base + spec, 0, 1.5) * (1 - 0.55 * np.clip((np.abs(dz) - 0.72) / 0.28, 0, 1))   # canto oscuro
+    # acero pulido: un reflejo fino y muy blanco (la ventana), uno ancho y tibio, y el canto oscuro
+    streak = np.exp(-((dz + 0.42) / 0.09) ** 2) * (0.75 + 0.25 * np.sin(s * 9.0)) * 2.2
+    spec = np.exp(-((dz + 0.38) / 0.22) ** 2) * 0.7 + np.exp(-((dz - 0.55) / 0.28) ** 2) * 0.16
+    base = 0.18 + 0.26 * (1 - np.abs(dz))
+    val = np.clip(base + spec, 0, 1.5) * (1 - 0.6 * np.clip((np.abs(dz) - 0.7) / 0.3, 0, 1))
     steel = lin("#c3c9cf")
-    rgb = steel[None, None, :] * val[..., None] + np.array([0.012, 0.014, 0.018])[None, None, :]
+    env = np.where(dz[..., None] < 0, np.array([1.04, 1.0, 0.94]), np.array([0.92, 0.97, 1.05]))  # sala tibia/cielo frío
+    rgb = steel[None, None, :] * val[..., None] * env + np.array([0.012, 0.014, 0.018])[None, None, :]
+    rgb = rgb + np.array([1.0, 0.98, 0.95])[None, None, :] * np.clip(streak, 0, 1.6)[..., None] * 0.55
     a = a.astype(np.float32)
     # sombra: la punta toca la tela (o la sombra entra con ella), la cabeza está en el aire
     sh_tip = tip if hide_from is None else back + (tip - back) * hide_from
@@ -259,7 +263,7 @@ def cloud(cx, cy, w, h, rng, t, u=1.0):
     cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     c = max(cs, key=cv2.contourArea).reshape(-1, 2).astype(np.float64)
     c = resample(np.vstack([c, c[:1]]), 6.0)[:-1] + [ox, oy]
-    return Piece(c, "#f4f0e6", rng, kind="plain", t_place=t, stitch=("#b9b3a6", 6 * u, 5 * u, 1.5 * u),
+    return Piece(c, "#f2eee6", rng, kind="felt", t_place=t, stitch=("#b9b3a6", 6 * u, 5 * u, 1.5 * u),
                  fabric_scale=u)
 
 
@@ -316,13 +320,13 @@ def doll(fx, base, hgt, rng, t, dress="#2f6fa6", dress_kind="dots", dress2="#f2e
         hip_l = np.array([fx - hgt * 0.20, hip_y - hgt * 0.02])
         hip_r = np.array([fx + hgt * 0.20, hip_y - hgt * 0.02])
         if arms == "point" and target is not None:
-            # un brazo estirado hacia el cerro (la amenaza); el otro, abajo
+            # un brazo bien estirado hacia el cerro (la amenaza); el otro, abajo
             d_ = np.asarray(target, np.float64) - np.array([fx, neck_y])
             d_ = d_ / (np.linalg.norm(d_) + 1e-9)
             if d_[0] >= 0:
-                hand_l, hand_r = down_l, sh_r + d_ * hgt * 0.36
+                hand_l, hand_r = down_l, sh_r + d_ * hgt * 0.5
             else:
-                hand_l, hand_r = sh_l + d_ * hgt * 0.36, down_r
+                hand_l, hand_r = sh_l + d_ * hgt * 0.5, down_r
         else:
             hand_l, hand_r = {"down": (down_l, down_r), "hip": (hip_l, hip_r), "wave": (down_l, up_r),
                               "up": (up_l, up_r), "point": (down_l, up_r)}[arms]
@@ -331,6 +335,8 @@ def doll(fx, base, hgt, rng, t, dress="#2f6fa6", dress_kind="dots", dress2="#f2e
         mid = (sh + hand) / 2 + np.array([side * 5 * u, 3 * u])
         if hand[1] < sh[1] - hgt * 0.1:           # brazo arriba: el codo hacia afuera
             mid = (sh + hand) / 2 + np.array([side * hgt * 0.06, hgt * 0.02])
+        if arms == "point" and np.hypot(*(hand - sh)) > hgt * 0.42:
+            mid = (sh + hand) / 2                   # apunta: brazo recto
         return Yarn(catmull_rom(np.array([sh, mid, hand]), 6), 3.4 * u, skin, rg, fuzz=0.3)
 
     arm_l, arm_r = arm(sh_l, hand_l, -1), arm(sh_r, hand_r, 1)
@@ -449,7 +455,15 @@ def doll_layer(d, lean=0.0):
         M = cv2.getRotationMatrix2D((float(fx), float(fy)), float(np.rad2deg(-lean)), 1.0)
         rgb = cv2.warpAffine(rgb, M, (w, h), flags=cv2.INTER_LINEAR)
         a = cv2.warpAffine(a, M, (w, h), flags=cv2.INTER_LINEAR)
-    return Sprite(x0, y0, rgb, a, None)
+    # volumen: la muñeca es rellena (más clara arriba a la izquierda) y está cosida encima: hace sombra
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    gx = (xx - w / 2) / max(1.0, w / 2)
+    gy = (yy - h / 2) / max(1.0, h / 2)
+    rgb = rgb * np.clip(1.0 - 0.11 * gx - 0.06 * gy, 0.82, 1.16)[..., None]
+    k = max(1.0, h / 60)
+    sh = cv2.GaussianBlur(a, (0, 0), 1.6 * k)
+    sh = cv2.warpAffine(sh, np.float32([[1, 0, 2.6 * k], [0, 1, 3.2 * k]]), (w, h))
+    return Sprite(x0, y0, rgb.astype(np.float32), a, (sh * 0.85).astype(np.float32))
 
 
 def _over_local(rgb, a, sp, ox, oy, shadow):
