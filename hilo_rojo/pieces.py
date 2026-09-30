@@ -60,6 +60,7 @@ class Piece:
                  fabric_scale=1.0, angle=0.0, felt=None, puff=1.0, shadow=0.5, fray=1.0, inset=5.5, margin=10,
                  rough=1.0, wear=1.0):
         poly = np.asarray(poly, np.float64)
+        self.kind = kind
         if rough > 0:
             size = float(min(np.ptp(poly[:, 0]), np.ptp(poly[:, 1])))
             k = rough * float(np.clip(size / (140 * max(0.6, fabric_scale)), 0.2, 1.0))    # retazos chicos: tijera fina
@@ -108,7 +109,8 @@ class Piece:
         composite(canvas, self.sprite, shadow=self.shadow_k)
         from .thread import composite_T, composite_T_piece
         if T0 is not None and C is not None:
-            composite_T_piece(T, T0, C, self.sprite)
+            crisp = dict(felt=0.2, cord=0.35, flannel=0.45, satin=0.5).get(self.kind, 0.7)
+            composite_T_piece(T, T0, C, self.sprite, crisp=crisp)
         else:
             composite_T(T, self.sprite)
 

@@ -26,7 +26,7 @@ class Sprite:
         self.x0, self.y0, self.rgb, self.a, self.sh, self.smap, self.tr = x0, y0, rgb, a, sh, smap, tr
 
 
-def composite_T_piece(T, T0, C, sp):
+def composite_T_piece(T, T0, C, sp, crisp=0.3, hem=True):
     """Transmisión de un retazo: la luz pasa por el yute (T0) y por la tela de más arriba; donde ya
     había otra tela (C), la costura superpuesta queda más oscura (como el plomo de un vitral)."""
     H, W = T.shape[:2]
@@ -40,7 +40,17 @@ def composite_T_piece(T, T0, C, sp):
     reg = T[cy0:cy1, cx0:cx1]
     c = C[cy0:cy1, cx0:cx1]
     seam = (1 - 0.5 * c)[..., None]
-    reg[:] = reg * (1 - a) + a * sp.tr[sl] * T0[cy0:cy1, cx0:cx1] * seam
+    # la tela difunde la luz: los huecos del yute se ven blandos a través de ella (no como un mosquitero)
+    T0r = T0[cy0:cy1, cx0:cx1]
+    T0b = getattr(composite_T_piece, "blur", None)
+    under = T0r if T0b is None else crisp * T0r + (1 - crisp) * T0b[cy0:cy1, cx0:cx1]
+    if hem:
+        # el dobladillo: la orilla de cada retazo va doblada (doble tela, más oscura a contraluz)
+        a2 = sp.a[sl]
+        k = max(3, int(round(min(a2.shape) * 0.0 + 8)))
+        inner = cv2.erode(a2, np.ones((k, k), np.uint8))
+        seam = seam * (1 - 0.45 * np.clip(a2 - inner, 0, 1))[..., None]
+    reg[:] = reg * (1 - a) + a * sp.tr[sl] * under * seam
     c[:] = np.maximum(c, sp.a[sl])
 
 

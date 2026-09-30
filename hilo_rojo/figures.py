@@ -245,14 +245,16 @@ def cloud(cx, cy, w, h, rng, t, u=1.0):
     m = np.zeros((H_, W_), np.uint8)
     ox, oy = cx - W_ / 2, cy - H_ / 2
     base_y = H_ / 2 + h * 0.35
-    n = 5
+    n = int(rng.integers(3, 6))
     for k in range(n):
-        fx = (k - (n - 1) / 2) / ((n - 1) / 2)
-        rx = w * (0.16 + 0.06 * (1 - abs(fx))) * rng.uniform(0.9, 1.1)
-        ry = h * (0.30 + 0.28 * (1 - abs(fx))) * rng.uniform(0.9, 1.1)
-        ccx = W_ / 2 + fx * w * 0.36
-        ccy = base_y - ry * 0.8
-        cv2.ellipse(m, (int(ccx), int(ccy)), (int(rx), int(ry)), 0, 0, 360, 255, -1, cv2.LINE_AA)
+        fx = (k - (n - 1) / 2) / max(1, (n - 1) / 2) + rng.normal(0, 0.12)
+        rx = w * (0.14 + 0.10 * (1 - abs(fx))) * rng.uniform(0.8, 1.2)
+        ry = h * (0.24 + 0.34 * (1 - abs(fx))) * rng.uniform(0.75, 1.15)
+        ry = min(ry, rx * 1.05)                     # lóbulos anchos: nubes, no botellas
+        ccx = W_ / 2 + fx * w * 0.34
+        ccy = base_y - ry * rng.uniform(0.6, 0.95)
+        cv2.ellipse(m, (int(ccx), int(ccy)), (int(rx), int(ry)), float(rng.uniform(-12, 12)), 0, 360, 255, -1,
+                    cv2.LINE_AA)
     cv2.rectangle(m, (int(W_ / 2 - w * 0.45), int(base_y - h * 0.25)), (int(W_ / 2 + w * 0.45), int(base_y)), 255, -1)
     cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     c = max(cs, key=cv2.contourArea).reshape(-1, 2).astype(np.float64)
@@ -263,23 +265,44 @@ def cloud(cx, cy, w, h, rng, t, u=1.0):
 
 # --- muñecas de tela (los «monitos» de la arpillera) -------------------------------------------------
 def doll(fx, base, hgt, rng, t, dress="#2f6fa6", dress_kind="dots", dress2="#f2eadb", skin="#c68e67",
-         hair="#1f1712", hand_y=None, arms="down", u=1.0, lean=0.0, hands=None):
-    """Muñeca cosida: vestido de retazo, cabeza de lana enrollada, pelo de lana, brazos de lana.
-    arms: "down" (a los costados), "hip" (en jarras), "wave" (una arriba), "up" (las dos arriba).
+         hair="#1f1712", hand_y=None, arms="down", u=1.0, lean=0.0, hands=None, kind="woman", target=None):
+    """Muñeca cosida (sin carita, como en las arpilleras). kind: woman, man (camisa, pantalón y sombrero),
+    child (más chica, trenzas), elder (chal y bastón). arms: down, hip, wave, up, point (hacia target).
     hands: puntos (izq, der) para poses especiales (p. ej. tirando de un hilo)."""
-    rg = np.random.default_rng(int(fx * 7 + base * 3) % (1 << 30))     # misma muñeca en todas sus poses
-    head_r = hgt * 0.15 * rg.uniform(0.92, 1.08)
+    rg = np.random.default_rng(int(fx * 7 + base * 3) % (1 << 30))     # la misma muñeca en todas sus poses
+    if kind == "child":
+        hgt *= 0.74
+    head_r = hgt * (0.17 if kind == "child" else 0.15) * rg.uniform(0.92, 1.08)
     neck_y = base - hgt * 0.68
-    hip_y = base - hgt * 0.22
+    hip_y = base - hgt * (0.22 if kind != "man" else 0.40)
     sw = rg.uniform(0.21, 0.27)
-    dress_poly = [(fx - hgt * 0.10, neck_y), (fx + hgt * 0.10, neck_y), (fx + hgt * sw, hip_y + hgt * 0.02),
-                  (fx - hgt * sw, hip_y + hgt * 0.02)]
-    body = Piece(dress_poly, dress, rg, kind=dress_kind, color2=dress2, t_place=t,
+    extra_below, extra_mid, extra_top, extra_front = [], [], [], []
+    if kind == "man":
+        body_poly = [(fx - hgt * 0.115, neck_y), (fx + hgt * 0.115, neck_y), (fx + hgt * 0.15, hip_y + hgt * 0.03),
+                     (fx - hgt * 0.15, hip_y + hgt * 0.03)]
+        pc = rg.choice(["#34384a", "#4a3a2c", "#2f3f35"])
+        for sgn in (-1, 1):
+            leg = [(fx + sgn * hgt * 0.015, hip_y), (fx + sgn * hgt * 0.14, hip_y), (fx + sgn * hgt * 0.12, base - 3 * u),
+                   (fx + sgn * hgt * 0.035, base - 3 * u)]
+            extra_below.append(Piece(leg, pc, rg, kind="cord", t_place=t, stitch=("#1c1a17", 4 * u, 3 * u, 1.1 * u),
+                                     fabric_scale=u * 0.7, margin=6, inset=2.5, rough=0.4, shadow=0.7))
+    else:
+        body_poly = [(fx - hgt * 0.10, neck_y), (fx + hgt * 0.10, neck_y), (fx + hgt * sw, hip_y + hgt * 0.02),
+                     (fx - hgt * sw, hip_y + hgt * 0.02)]
+    body = Piece(body_poly, dress, rg, kind=dress_kind, color2=dress2, t_place=t,
                  stitch=("#2a2019", 5 * u, 4 * u, 1.3 * u), fabric_scale=u * 0.8, margin=8, inset=3.5, puff=1.8,
                  shadow=0.75)
+    if kind == "elder":
+        sh_poly = [(fx - hgt * 0.17, neck_y + hgt * 0.02), (fx + hgt * 0.17, neck_y + hgt * 0.02),
+                   (fx + hgt * 0.02, neck_y + hgt * 0.30), (fx - hgt * 0.02, neck_y + hgt * 0.30)]
+        extra_mid.append(Piece(sh_poly, rg.choice(["#6b3f5e", "#3f5b6b", "#7a5a2e"]), rg, kind="flannel",
+                               color2="#2e2a2a", t_place=t, stitch=("#231c18", 4 * u, 3 * u, 1.1 * u),
+                               fabric_scale=u * 0.7, margin=6, inset=2.5, rough=0.5, shadow=0.7))
+        hair = "#b8b1a6"
     lx = rg.uniform(0.06, 0.09)
-    legs = [Yarn([(fx - hgt * lx, hip_y), (fx - hgt * (lx + 0.01), base - 2)], 3.2 * u, "#2a2019", rg, fuzz=0.4),
-            Yarn([(fx + hgt * lx, hip_y), (fx + hgt * (lx + 0.01), base - 2)], 3.2 * u, "#2a2019", rg, fuzz=0.4)]
+    legs = [] if kind == "man" else [
+        Yarn([(fx - hgt * lx, hip_y), (fx - hgt * (lx + 0.01), base - 2)], 3.2 * u, "#2a2019", rg, fuzz=0.4),
+        Yarn([(fx + hgt * lx, hip_y), (fx + hgt * (lx + 0.01), base - 2)], 3.2 * u, "#2a2019", rg, fuzz=0.4)]
     sh_l = np.array([fx - hgt * 0.10, neck_y + hgt * 0.05])
     sh_r = np.array([fx + hgt * 0.10, neck_y + hgt * 0.05])
     head_top = neck_y - head_r * 1.9
@@ -292,36 +315,61 @@ def doll(fx, base, hgt, rng, t, dress="#2f6fa6", dress_kind="dots", dress2="#f2e
         up_r = np.array([fx + hgt * 0.30, head_top - hgt * 0.02])
         hip_l = np.array([fx - hgt * 0.20, hip_y - hgt * 0.02])
         hip_r = np.array([fx + hgt * 0.20, hip_y - hgt * 0.02])
-        hand_l, hand_r = {"down": (down_l, down_r), "hip": (hip_l, hip_r), "wave": (down_l, up_r),
-                          "up": (up_l, up_r)}[arms]
+        if arms == "point" and target is not None:
+            # un brazo estirado hacia el cerro (la amenaza); el otro, abajo
+            d_ = np.asarray(target, np.float64) - np.array([fx, neck_y])
+            d_ = d_ / (np.linalg.norm(d_) + 1e-9)
+            if d_[0] >= 0:
+                hand_l, hand_r = down_l, sh_r + d_ * hgt * 0.36
+            else:
+                hand_l, hand_r = sh_l + d_ * hgt * 0.36, down_r
+        else:
+            hand_l, hand_r = {"down": (down_l, down_r), "hip": (hip_l, hip_r), "wave": (down_l, up_r),
+                              "up": (up_l, up_r), "point": (down_l, up_r)}[arms]
 
     def arm(sh, hand, side):
         mid = (sh + hand) / 2 + np.array([side * 5 * u, 3 * u])
         if hand[1] < sh[1] - hgt * 0.1:           # brazo arriba: el codo hacia afuera
-            mid = (sh + hand) / 2 + np.array([side * hgt * 0.10, 0])
+            mid = (sh + hand) / 2 + np.array([side * hgt * 0.06, hgt * 0.02])
         return Yarn(catmull_rom(np.array([sh, mid, hand]), 6), 3.4 * u, skin, rg, fuzz=0.3)
 
     arm_l, arm_r = arm(sh_l, hand_l, -1), arm(sh_r, hand_r, 1)
+    if kind == "elder":
+        hb = hand_r if hand_r[1] > neck_y else hand_l
+        extra_front.append(Yarn([hb, (hb[0] + hgt * 0.04, base)], 3.0 * u, "#6b4a2a", rg, fuzz=0.3))
     hc = (fx, neck_y - head_r * 0.92)
     head = yarn_head(hc, head_r, skin, rg, u)
     hair_y = []
     nh = int(rg.integers(7, 11))
-    style = rg.integers(0, 3)          # 0 trenzas/mechas largas, 1 corto, 2 tomate
+    style = {"man": 1, "child": 0, "elder": 2}.get(kind, int(rg.integers(0, 3)))
     for k in range(nh):
         a = np.pi * (0.95 + 1.1 * k / (nh - 1))
         p = (hc[0] + np.cos(a) * head_r * 0.92, hc[1] + np.sin(a) * head_r * 0.92)
         L = head_r * (1.25 if k in (0, nh - 1) else 1.12) * (0.9 if style == 1 else 1.0)
-        drop = head_r * (0.9 if style == 0 else 0.3) if k in (0, nh - 1) else 0
+        drop = head_r * (1.25 if kind == "child" else 0.9 if style == 0 else 0.3) if k in (0, nh - 1) else 0
         q = (hc[0] + np.cos(a) * L, hc[1] + np.sin(a) * L + drop)
         hair_y.append(Yarn(catmull_rom(np.array([p, ((p[0] + q[0]) / 2 + rg.normal(0, 1), (p[1] + q[1]) / 2 - 2 * u),
                                                  q]), 5), 3.4 * u, hair, rg, fuzz=0.8))
+        if kind == "child" and k in (0, nh - 1):
+            extra_top.append(knot(q, 3.2 * u, "#c3241c" if k == 0 else "#2f6fa6", rg))
     if style == 2:
         hair_y.append(Yarn(np.array([(hc[0] - 4 * u, hc[1] - head_r * 1.05), (hc[0] + 4 * u, hc[1] - head_r * 1.25)]),
                            7 * u, hair, rg, fuzz=0.9))
+    if kind == "man":
+        brim = ellipse_poly(hc[0], hc[1] - head_r * 0.72, head_r * 1.55, head_r * 0.28, n=28)
+        crown = [(hc[0] - head_r * 0.8, hc[1] - head_r * 0.72), (hc[0] - head_r * 0.62, hc[1] - head_r * 1.55),
+                 (hc[0] + head_r * 0.62, hc[1] - head_r * 1.55), (hc[0] + head_r * 0.8, hc[1] - head_r * 0.72)]
+        hc_ = rg.choice(["#5b4636", "#2e2b28", "#6d5a3a"])
+        extra_top.append(Piece(crown, hc_, rg, kind="felt", t_place=t, stitch=None, margin=6, rough=0.3, shadow=0.7))
+        extra_top.append(Piece(brim, hc_, rg, kind="felt", t_place=t, stitch=None, margin=6, rough=0.3, shadow=0.7))
     shoes = [knot((fx - hgt * (lx + 0.01), base - 1), 2.4 * u, "#1a1410", rg),
              knot((fx + hgt * (lx + 0.01), base - 1), 2.4 * u, "#1a1410", rg)]
+    if kind == "man":
+        shoes = [knot((fx - hgt * 0.08, base - 1), 3.0 * u, "#1a1410", rg),
+                 knot((fx + hgt * 0.08, base - 1), 3.0 * u, "#1a1410", rg)]
     return dict(t=t, body=body, legs=legs, arms=[arm_l, arm_r], head=head, hair=hair_y, eyes=[], shoes=shoes,
-                hands=(hand_l, hand_r), foot=np.array([fx, base]), lean=lean)
+                hands=(hand_l, hand_r), foot=np.array([fx, base]), lean=lean, below=extra_below, mid=extra_mid,
+                top=extra_top, front=extra_front)
 
 
 def yarn_head(c, r, color, rng, u=1.0):
@@ -372,13 +420,19 @@ def yarn_head(c, r, color, rng, u=1.0):
 
 def doll_layer(d, lean=0.0):
     """Toda la muñeca en una capa premultiplicada (para posarla o cambiarla de pose cuadro a cuadro)."""
+    sp_of = lambda x: x.sprite if isinstance(x, Piece) else x
     parts = []
     for y in d["legs"]:
         parts += y.chunks
+    parts += [sp_of(x) for x in d.get("below", [])]
     parts.append(d["body"].sprite)
+    parts += [sp_of(x) for x in d.get("mid", [])]
     parts += d["shoes"]
     parts.append(d["head"])
-    for y in d["hair"] + d["arms"]:
+    for y in d["hair"]:
+        parts += y.chunks
+    parts += [sp_of(x) for x in d.get("top", [])]
+    for y in d["arms"] + d.get("front", []):
         parts += y.chunks
     x0 = min(p.x0 for p in parts) - 14
     y0 = min(p.y0 for p in parts) - 14

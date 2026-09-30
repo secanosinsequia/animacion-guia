@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 from satc_intro.color import lin
+from satc_intro.geometry import catmull_rom
 from .figures import hershey_strokes
 from .pieces import Piece
 from .thread import Sprite, Stitch, Yarn, knot, backstitch
@@ -110,32 +111,48 @@ def build_signals(info, u, rng, T0):
         st(t0 + 0.45 + 0.05 * (cx_ + 1), c - (4 * u, 3 * u), c + (4 * u, 3 * u), 2.4 * u, h=1)
     H3 = nc.copy()
 
-    # --- 3. la toma de agua: cañería hilvanada y su caseta (H4) --------------------------------------
+    # --- 3. la toma de agua: una cañería que sale del río, con su llave de paso (H4) -------------------
     t0, t1 = T0["intake"]
     bank, into = info["intake"]
     d = into - bank
     L = float(np.hypot(*d))
     tv = d / L
     nv = np.array([-tv[1], tv[0]])
-    shed_c = bank - tv * 34 * u + nv * 6 * u
-    sw, shh = 26 * u, 20 * u
-    shed = [shed_c + (-sw, 0), shed_c + (-sw, -shh * 2), shed_c + (sw, -shh * 2), shed_c + (sw, 0)]
-    pieces.append((t0, Piece(shed, "#9aa0a3", rng, kind="stripes", color2="#7d8386", stitch=None, fabric_scale=u * 0.6,
-                             margin=8, rough=0.4, shadow=0.7), 2))
-    roof = [shed_c + (-sw - 5 * u, -shh * 2 + 3 * u), shed_c + (0, -shh * 2 - 13 * u), shed_c + (sw + 5 * u, -shh * 2 + 3 * u)]
-    pieces.append((t0 + 0.04, Piece(roof, "#5c6163", rng, kind="cord", stitch=None, fabric_scale=u * 0.6, margin=8,
-                                    rough=0.3, shadow=0.7), 2))
-    # la cañería: un cordón gris grueso, sujeto con puntadas largas de hilván
-    pipe_pts = np.array([shed_c + (sw * 0.6, -4 * u), bank + nv * 2 * u, (bank + into) / 2 + nv * 3 * u,
-                         into + tv * 22 * u])
-    pipe = Yarn(pipe_pts, 9.0 * u, "#8b9094", rng, fuzz=0.15, kind="floss")
+    # la cañería: nace dentro del agua (boca), cruza la orilla y se va potrero adentro
+    mouth = into + tv * 16 * u
+    out_end = bank - tv * 150 * u + nv * 10 * u
+    pipe_pts = catmull_rom(np.array([mouth, (mouth + bank) / 2 + nv * 2 * u, bank - tv * 20 * u,
+                                     bank - tv * 90 * u + nv * 6 * u, out_end]), 10)
+    pipe = Yarn(pipe_pts, 11.0 * u, "#8e9498", rng, fuzz=0.1, kind="floss")
     for ch in pipe.chunks:
-        extra.append((t0 + 0.14, ch, 2))
+        extra.append((t0 + 0.06, ch, 2))
+    # boca de la cañería en el agua: un anillo oscuro
+    extra.append((t0 + 0.06, knot(mouth, 6.5 * u, "#3a3f43", rng), 2))
+    # la llave de paso: un volante rojo con cuatro rayos, sobre la cañería
+    vc = bank - tv * 60 * u + nv * 3 * u
+    R_ = 15 * u
+    ring = catmull_rom(np.array([vc + R_ * np.array([np.cos(a_), np.sin(a_)]) for a_ in
+                                 np.linspace(0, 2 * np.pi, 13)]), 4)
+    for ch in Yarn(ring, 4.4 * u, "#b42a1e", rng, fuzz=0.2, kind="floss").chunks:
+        extra.append((t0 + 0.12, ch, 2))
+    for k in range(4):
+        a_ = np.pi / 4 + k * np.pi / 2
+        extra.append((t0 + 0.12, Stitch.render(vc, vc + R_ * np.array([np.cos(a_), np.sin(a_)]), 2.8 * u, "#8e1f16", rng,
+                                               kind="floss", hole=False, bow=0), 2))
+    extra.append((t0 + 0.12, knot(vc, 4.2 * u, "#6e1a12", rng), 2))
+    # vástago de la llave (une el volante con la cañería)
+    extra.append((t0 + 0.1, Stitch.render(vc + nv * 1 * u, vc - nv * 0 * u + tv * 0, 4 * u, "#5d6266", rng,
+                                          kind="floss", hole=False, bow=0), 2))
+    # puntadas largas de hilván que sujetan la cañería (la tomaron «de paso»)
     for k in range(4):
         f = (k + 0.5) / 4
-        p = pipe_pts[1] + (pipe_pts[3] - pipe_pts[1]) * f
-        st(t0 + 0.2 + 0.07 * k, p - nv * 8 * u - tv * 3 * u, p + nv * 8 * u + tv * 3 * u, 2.6 * u, h=2)
-    kp = bank + nv * 12 * u
+        idx = int(f * (len(pipe_pts) - 1))
+        p = pipe_pts[idx]
+        tg = pipe_pts[min(idx + 1, len(pipe_pts) - 1)] - pipe_pts[max(idx - 1, 0)]
+        tg = tg / (np.linalg.norm(tg) + 1e-9)
+        ng = np.array([-tg[1], tg[0]])
+        st(t0 + 0.2 + 0.07 * k, p - ng * 10 * u - tg * 3 * u, p + ng * 10 * u + tg * 3 * u, 2.6 * u, h=2)
+    kp = out_end + nv * 12 * u
     g.append((t0 + 0.5, knot(kp, 5.0 * u, BLK, rng), kp, kp, 2))
     H4 = bank.copy()
 

@@ -13,7 +13,7 @@ from satc_intro.geometry import catmull_rom
 from satc_intro.noise import fbm, smooth_noise, smoothstep
 from .figures import hershey_strokes, hershey_strokes_es
 from .textile import fabric, fray_mask, shade
-from .thread import Sprite, Yarn, composite, knot, backstitch
+from .thread import Sprite, Stitch, Yarn, composite, knot, backstitch
 
 LIGHT2 = np.array([-0.64, -0.56])
 WOOL = "#c3241c"
@@ -214,6 +214,8 @@ class World:
             hg.img = nb["img"].astype(np.float32)
             hg.exit = nb.get("exit")
             hg.wool_w = nb.get("wool_w", 7.0)
+            hg.red = nb.get("red")                    # su lana roja (Yarn, de arriba a la puerta)
+            hg.lit = nb.get("lit", [])                # sus ventanas encendidas
             self.nbs.append(hg)
         self.ea_main = edge_alpha(*layout["main"]["size"])
         for hg in self.nbs:
@@ -242,13 +244,24 @@ class World:
         self.knot_x = None
         if layout.get("wool_exit") is not None:
             self.knot_x = float(self.main.img_to_world(layout["wool_exit"][1])[0])
-        self.front_v = 1300 * self.u                   # ~110 px por imagen
-        # cámara: distancia inicial para que el plano del cordel se vea con z0
-        self.d0 = Z_ARP + (D1 - Z_ARP) / layout["z0"]
+        self.front_v = 1700 * self.u                   # ~140 px por imagen
+        # tomas: los centros pueden venir en coordenadas de la arpillera principal ("img") o de mundo
+        shots = []
+        for sh in layout.get("shots", []):
+            t0, t1, zt, ct = sh
+            if isinstance(ct, tuple) and len(ct) == 2 and ct[0] == "img":
+                ct = self.main.img_to_world(ct[1])
+            elif isinstance(ct, str) and ct == "c0":
+                ct = layout["c0"]
+            elif isinstance(ct, str) and ct == "final":
+                ct = (W / 2, H / 2)
+            shots.append((t0, t1, zt, ct))
+        layout["shots"] = shots
+        self.main_u = min(layout["main"]["size"]) / 1080
         yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
         nx, ny = xx / W - 0.5, yy / H - 0.5
         self.vign = (1 - 0.30 * (nx * nx * 1.1 + ny * ny * 1.3) ** 1.1).astype(np.float32)
-        self.rake = (1 + 0.08 * (-(nx * 0.8 + ny * 0.6))).astype(np.float32)
+        self.rake = (1 + 0.14 * (-(nx * 0.85 + ny * 0.5))).astype(np.float32)
         self.xx, self.yy = xx, yy
         # grano de película: 6 texturas que se turnan (cada imagen única tiene el suyo)
         rg = np.random.default_rng(seed + 7)
@@ -259,37 +272,50 @@ class World:
             self.grain.append(gr / (gr.std() + 1e-6))
 
     # ------------------------------------------------------------------------------------------------
-    # cámara: se aleja por pasos desparejos, como en un rodaje cuadro a cuadro
-    def camera(self, tq, T):
-        a, b = T["dolly"]
-        n = max(2, int(round((b - a) * 12)))
-        if not hasattr(self, "_steps"):
-            rs = np.random.default_rng(23)
+    # cámara: se mueve por pasos desparejos, como en un rodaje cuadro a cuadro
+    def _dist(self, z):
+        return Z_ARP + (D1 - Z_ARP) / z
+
+    def _build_shots(self):
+        """Tomas: [(t0, t1, z, c)] en mundo. Cada movimiento va por pasos con tamaños desparejos, alguna
+        imagen retenida, temblor de mano y un pequeño sobrepaso al asentarse."""
+        rs = np.random.default_rng(23)
+        self._shots = []
+        for (t0, t1, zt, ct) in self.L.get("shots", []):
+            n = max(2, int(round((t1 - t0) * 12)))
             base = np.diff(smoothstep(0, 1, np.linspace(0, 1, n + 1)))
-            steps = base * rs.uniform(0.82, 1.18, n)
-            for hold in (int(n * 0.3), int(n * 0.68)):          # dos imágenes retenidas
-                steps[hold] = 0
+            steps = base * rs.uniform(0.8, 1.2, n)
+            if n >= 8:
+                for hold in (int(n * 0.3), int(n * 0.68)):
+                    steps[hold] = 0
             e = np.concatenate([[0], np.cumsum(steps)])
             e /= e[-1]
-            self._steps = np.concatenate([e, [1.016, 1.005, 1.0]])   # y un pequeño sobrepaso al asentarse
-            self._jit = rs.normal(0, 1.0, (len(self._steps) + 4, 2))
-        i = int(np.floor((tq - a) * 12 + 1e-6))
-        if i < 0:
-            e, jit = 0.0, (0.0, 0.0)
-        elif i >= len(self._steps):
-            e, jit = 1.0, (0.0, 0.0)
-        else:
-            e = float(self._steps[i])
-            jit = tuple(self._jit[i] * (1.0 if 0 < i < len(self._steps) - 1 else 0.0))
-        d = self.d0 + (D1 - self.d0) * e
-        z = (D1 - Z_ARP) / (d - Z_ARP)
-        zw = D1 / d
-        zs = (D1 - Z_STRIP) / (d - Z_STRIP)
-        z0 = self.L["z0"]
-        c0 = np.asarray(self.L["c0"], np.float64)
-        c1 = np.array([self.W / 2, self.H / 2])
-        f = (z0 - z) / (z0 - 1) if z0 != 1 else 1.0
-        return dict(z=z, zw=zw, zs=zs, c=c0 + (c1 - c0) * f, jit=jit)
+            e = np.concatenate([e[1:], [1.016, 1.005]])
+            jits = rs.normal(0, 1.0, (len(e), 2))
+            jits[-3:] *= 0.4
+            self._shots.append((t0, t1, float(zt), np.asarray(ct, np.float64), e, jits))
+
+    def camera(self, tq, T=None):
+        if not hasattr(self, "_shots"):
+            self._build_shots()
+        z = float(self.L["z0"])
+        c = np.asarray(self.L["c0"], np.float64)
+        jit = (0.0, 0.0)
+        for (t0, t1, zt, ct, e_, jits) in self._shots:
+            if tq < t0 - 1e-6:
+                break
+            i = int(np.floor((tq - t0) * 12 + 1e-6))
+            if i >= len(e_):
+                z, c = zt, ct
+                continue
+            e = float(e_[i])
+            d = self._dist(z) + (self._dist(zt) - self._dist(z)) * e
+            c = c + (ct - c) * e
+            z = (D1 - Z_ARP) / (d - Z_ARP)
+            jit = tuple(jits[i])
+            break
+        d = self._dist(z)
+        return dict(z=z, zw=D1 / d, zs=(D1 - Z_STRIP) / (d - Z_STRIP), c=c, jit=jit)
 
     # ------------------------------------------------------------------------------------------------
     def _title_strip(self, spec):
@@ -333,6 +359,12 @@ class World:
             for (strokes, w, kind), space in zip(ws, space_list):
                 for st in strokes:
                     st = st + np.array([x, 0.0])
+                    # bordado a mano: cada trazo con su línea base, su giro y su escala
+                    c_ = st.mean(axis=0)
+                    th_ = np.deg2rad(rng.normal(0, 1.4))
+                    sc_ = 1 + rng.normal(0, 0.03)
+                    R_ = np.array([[np.cos(th_), -np.sin(th_)], [np.sin(th_), np.cos(th_)]]) * sc_
+                    st = (st - c_) @ R_.T + c_ + np.array([0, rng.normal(0, 1.2) * u2])
                     if kind == "wool":
                         if len(st) < 2:
                             continue
@@ -344,12 +376,27 @@ class World:
                     else:
                         for _, sp in backstitch(st, 6.2 * u2, 2.5 * u2, dark, rng, jitter=0.2):
                             items.append(sp)
+                # cola de hilo al terminar algunas palabras
+                if kind != "wool" and rng.random() < 0.45 and strokes:
+                    e0 = strokes[-1][-1] + np.array([x, 0.0])
+                    tail = np.array([e0, e0 + np.array([rng.uniform(2, 5), rng.uniform(4, 8)]) * u2,
+                                     e0 + np.array([rng.uniform(-2, 6), rng.uniform(9, 15)]) * u2])
+                    items += Yarn(catmull_rom(tail, 6), (1.3 if kind == "small" else 2.2) * u2, dark, rng, fuzz=0,
+                                  kind="floss").chunks
                 x += w + space
-        # todo junto en una capa (se tuerce y se comba como una sola tela)
+        # todo junto en una capa (se tuerce y se comba como una sola tela); el bordado, solo dentro de la tela
         layer_rgb = strip.rgb.copy()
         layer_a = strip.a.copy()
+        emb_rgb = np.zeros_like(layer_rgb)
+        emb_a = np.zeros_like(layer_a)
         for sp in items:
-            _premult_over_local(layer_rgb, layer_a, sp, int(ox), int(oy))
+            _premult_over_local(emb_rgb, emb_a, sp, int(ox), int(oy))
+        inside = cv2.erode((strip.a > 0.5).astype(np.uint8), np.ones((17, 17), np.uint8)).astype(np.float32)
+        inside = cv2.GaussianBlur(inside, (0, 0), 1.0)
+        emb_rgb *= inside[..., None]
+        emb_a *= inside
+        layer_rgb = layer_rgb * (1 - emb_a)[..., None] + emb_rgb
+        layer_a = np.maximum(layer_a, emb_a)
         hgt_, wid_ = layer_a.shape
         ang = np.deg2rad(-0.8)
         M = cv2.getRotationMatrix2D((wid_ / 2, pad), float(np.rad2deg(ang)), 1.0)
@@ -466,6 +513,10 @@ class World:
                             borderMode=cv2.BORDER_REFLECT)
         Ms = np.float32([[zs / 2, 0, W / 2 - c[0] * zs], [0, zs / 2, H / 2 - c[1] * zs]])
         self._draw_sprites(bg, self.title, Ms, shadow=0.38)
+        # foco: con la cámara cerca, la pared (8 cm detrás de las telas) queda algo desenfocada
+        sig = 2.2 * max(0.0, cam["z"] - 1.0) * self.u
+        if sig > 0.3:
+            bg = cv2.GaussianBlur(bg, (0, 0), sig)
         return bg
 
     def _layers(self, cam):
@@ -486,7 +537,7 @@ class World:
             aF = np.zeros((H, W), np.float32)
             aF[y0:y1, x0:x1] = self._sample(hg.ea, wp)
             rgbF[y0:y1, x0:x1] = self._sample(hg.img, wp) * wp["folds"][..., None]
-            lays.append((hg, rgbF, aF))
+            lays.append((hg, rgbF, aF, wp))
         wpm = self._warp_hanging(self.main, z, c)
         amF = np.zeros((H, W), np.float32)
         if wpm is not None:
@@ -518,6 +569,23 @@ class World:
         r = self.front_radius(tau)
         w = 48 * self.u
         return -24 * self.u * np.exp(-((dd - r) / w) ** 2) * np.exp(-dd / (2600 * self.u))
+
+    def nb_progress(self, hg, tau):
+        """Cuando el rojo llega por el cordel al nudo de una vecina: baja por su lana (up), entra en su tela
+        hasta la puerta (inside) y se enciende la ventana (lit)."""
+        out = dict(up=0.0, inside=0.0, lit=False, t_arrive=None)
+        if tau is None or tau < 0 or hg.exit is None or self.knot_x is None:
+            return out
+        xk = float(hg.img_to_world(hg.exit[1])[0])
+        t_arr = abs(xk - self.knot_x) / self.front_v
+        out["t_arrive"] = t_arr
+        dt = tau - t_arr
+        if dt <= 0:
+            return out
+        out["up"] = float(np.clip(dt / 0.17, 0, 1))
+        out["inside"] = float(np.clip((dt - 0.17) / 0.5, 0, 1))
+        out["lit"] = dt >= 0.17 + 0.5
+        return out
 
     def swing(self, hg, tq, tau):
         """Ángulo de péndulo de una tela cuando le llega el frente (±2,5°, se apaga en ~7 imágenes)."""
@@ -573,16 +641,40 @@ class World:
                 part = seg[max(0, k0 - 1):min(len(seg), k + 1)]
                 if len(part) >= 2:
                     col = WOOL if red[k0] else HEMP
-                    wdt = self.line_w * z * (1.08 if red[k0] else 1.0)
+                    wdt = self.line_w * z * (1.4 if red[k0] else 1.0)
                     y = Yarn(part, wdt, col, np.random.default_rng(7 + k0), fuzz=0.9 if red[k0] else 1.2,
                              step=max(1.0, 1.6 * u))
                     for ch in y.chunks:
                         _premult_over(fg_rgb, fg_a, ch, shadow=0.45)
                 k0 = k
 
-    def _wool_up(self, rgb, a, hg, ex, P, z, w_img, M=None, tau=None):
+    def _front_wraps(self, fg_rgb, fg_a, P, z, tau):
+        """La punta del frente rojo: vueltas de lana enrolladas en espiral sobre el cordel."""
+        if tau is None or self.knot_x is None:
+            return
+        r = self.front_radius(tau)
+        u = self.u * z
+        rng = np.random.default_rng(int(tau * 1000))
+        for sgn in (-1, 1):
+            xf = self.knot_x + sgn * r
+            for j in range(5):
+                xw = xf - sgn * (j * 8.5 + 3) * self.u
+                if abs(xw - self.knot_x) > r:
+                    continue
+                yw = self.line_y(xw) + float(self.kink_dy(np.array([xw]), tau)[0]) - 1.5 * self.u
+                p = np.array([xw, yw]) @ P[:, :2].T + P[:, 2]
+                if not (-40 < p[0] < self.W + 40 and -40 < p[1] < self.H + 40):
+                    continue
+                d = np.array([2.8, 5.2]) * u * (1 if j % 2 else 0.9)
+                sp = Stitch.render(p - d, p + d, 3.4 * u, WOOL, rng, kind="wool", hole=False, bow=0)
+                _premult_over(fg_rgb, fg_a, sp, shadow=0.4)
+
+    def _wool_up(self, rgb, a, hg, ex, P, z, w_img, M=None, tau=None, frac=1.0):
         """La lana que sale por el borde de arriba de una arpillera sube al cordel y se anuda.
-        ex = [(x, y) en la guarda, (x, 0) en el borde] (coordenadas de la imagen)."""
+        ex = [(x, y) en la guarda, (x, 0) en el borde] (coordenadas de la imagen). frac: cuánto se ve, desde
+        el cordel hacia abajo (la alerta que baja)."""
+        if frac <= 0:
+            return
         p_in = hg.img_to_world(ex[0])
         p_edge = hg.img_to_world(ex[1])
         d = p_edge - p_in
@@ -593,13 +685,16 @@ class World:
         if M is not None:
             a_s = M[:, :2] @ a_s + M[:, 2]
             b_s = M[:, :2] @ b_s + M[:, 2]
-        pts = np.array([a_s, b_s, S(top)])
+        pts = catmull_rom(np.array([S(top), b_s, a_s]), 10)
+        if frac < 1:
+            pts = _cut_path(pts, frac)
         w = w_img * hg.s * z
         rng = np.random.default_rng(int(abs(ex[0][0])) + 3)
-        y = Yarn(catmull_rom(pts, 10), w, WOOL, rng, fuzz=0.9)
-        for ch in y.chunks:
-            _premult_over(rgb, a, ch, shadow=0.45)
-        kp = pts[-1]
+        if len(pts) >= 2:
+            y = Yarn(pts, w, WOOL, rng, fuzz=0.9)
+            for ch in y.chunks:
+                _premult_over(rgb, a, ch, shadow=0.45)
+        kp = S(top)
         r = max(w, self.line_w * z) * 0.66
         for dx, dy, k in ((-0.55, 0.15, 0.95), (0.6, 0.1, 1.0), (0.0, -0.1, 1.1)):
             _premult_over(rgb, a, knot(kp + np.array([dx, dy]) * r * 1.2, r * k, "#b41f18", rng), shadow=0.45)
@@ -626,68 +721,119 @@ class World:
             composite(out, Sprite(x0, y0, rgb, a, sh), shadow=shadow)
 
     # ------------------------------------------------------------------------------------------------
-    def render_at(self, main_lin, tq, T, F=1.0, B=0.0, lamp=None, flick=0.0, wool_tied=False, dangle=None, k=0):
-        """Compone el cuadro completo en el instante tq."""
+    def _F_field(self, F):
+        """Luz de frente en pantalla: un número, o la cortina que se abre desde la izquierda."""
+        if not isinstance(F, dict):
+            return float(F)
+        W = self.W
+        xe = -0.3 * W + 1.6 * W * F["curtain"]
+        lit = smoothstep(xe, xe - 0.35 * W, self.xx[0])
+        f = F["fmin"] + (1 - F["fmin"]) * lit
+        return np.broadcast_to(f[None, :, None], (self.H, W, 1)).astype(np.float32)
+
+    def render_at(self, main_lin, tq, T, F=1.0, B=0.0, lamp=None, flick=0.0, wool_tied=False, dangle=None, k=0,
+                  glow=None, alpha=None):
+        """Compone el cuadro completo en el instante tq. main_lin: la arpillera con luz de frente plena;
+        glow: su resplandor a contraluz (o None); alpha: su silueta (con el frunce) o None."""
         W, H = self.W, self.H
-        cam = self.camera(tq, T)
+        cam = self.camera(tq)
         z, c = cam["z"], cam["c"]
         st = self._layers(cam)
         P = st["P"]
+        Ff = self._F_field(F)
         tau = (tq - T["front"][0]) if tq >= T["front"][0] else None
         dynamic = tau is not None and (not self.front_done(tau) or tau < 1.6)
         red_all = tau is not None and self.front_done(tau)
-        out = st["bg"] * F
+        out = st["bg"] * Ff
         # la arpillera principal (y las vecinas) en su pose
         mrgb = np.zeros((H, W, 3), np.float32)
+        mglow = None
+        amF = st["amF"]
         wpm = st["wpm"]
         if wpm is not None:
             x0, y0, x1, y1 = wpm["box"]
             mrgb[y0:y1, x0:x1] = self._sample(main_lin, wpm) * wpm["folds"][..., None]
-        items = [(hg, r_, a_, F) for (hg, r_, a_) in st["lays"]] + [(self.main, mrgb, st["amF"], 1.0)]
+            if glow is not None:
+                mglow = np.zeros((H, W, 3), np.float32)
+                mglow[y0:y1, x0:x1] = self._sample(glow, wpm)
+            if alpha is not None:
+                amF = np.zeros((H, W), np.float32)
+                amF[y0:y1, x0:x1] = self._sample(alpha, wpm)
+        items = []
+        for (hg, r_, a_, wp_) in st["lays"]:
+            pr = self.nb_progress(hg, tau)
+            if pr["inside"] > 0 or pr["lit"]:
+                key = (id(st), round(pr["inside"], 3), pr["lit"])
+                cache = getattr(hg, "_redcache", None)
+                if cache is not None and cache[0] == key:
+                    r_ = cache[1]
+                else:
+                    # la lana roja baja por la arpillera vecina y enciende su ventana
+                    img2 = hg.img.copy()
+                    if hg.red is not None:
+                        hg.red.draw(img2, hg.red.length * pr["inside"])
+                    if pr["lit"]:
+                        for sp in hg.lit:
+                            composite(img2, sp, shadow=0.3)
+                    x0, y0, x1, y1 = wp_["box"]
+                    r_ = np.zeros_like(r_)
+                    r_[y0:y1, x0:x1] = self._sample(img2, wp_) * wp_["folds"][..., None]
+                    hg._redcache = (key, r_)
+            items.append((hg, r_, a_))
+        items.append((self.main, mrgb, amF))
         placed, poses = [], {}
-        for hg, rgbF, aF, lit in items:
+        for hg, rgbF, aF in items:
             if dynamic:
                 M, dth, pins2 = self._pose(hg, P, tau, tq)
                 poses[id(hg)] = (M, dth, pins2)
-                placed.append((cv2.warpAffine(rgbF, M, (W, H), flags=cv2.INTER_LINEAR) * lit,
+                placed.append((cv2.warpAffine(rgbF, M, (W, H), flags=cv2.INTER_LINEAR),
                                cv2.warpAffine(aF, M, (W, H), flags=cv2.INTER_LINEAR)))
             else:
                 poses[id(hg)] = (None, 0.0, hg.pin_pts)
-                placed.append((rgbF * lit, aF))
+                placed.append((rgbF, aF))
         a_all = np.zeros((H, W), np.float32)
         for _, a2 in placed:
             a_all = np.maximum(a_all, a2)
         self._shadow_into(out, a_all, cam)
-        # la lámpara de atrás se escapa por los bordes y lava la pared
+        # la luz de atrás se escapa por los bordes y lava la pared
         if B > 0 and lamp is not None:
-            am = st["amF"]
             if isinstance(lamp, str):
-                fld = am
+                fld = amF
+            elif "band" in lamp:
+                lw = self.main.img_to_world((lamp["band"] * self.main.iw, self.main.ih / 2))
+                lsx = float((lw @ P[:, :2].T + P[:, 2])[0])
+                fld = amF * np.exp(-((self.xx - lsx) / (0.2 * self.main.iw * self.main.s * z)) ** 2)
             else:
                 lw = self.main.img_to_world(lamp["c"])
                 lsx, lsy = lw @ P[:, :2].T + P[:, 2]
                 R = lamp["R"] * self.main.s * z
-                fld = am * np.exp(-((self.xx - lsx) ** 2 + (self.yy - lsy) ** 2) / (2 * R * R))
-            spill = cv2.GaussianBlur(fld, (0, 0), 38 * self.u * z) * (1 - am)
+                fld = amF * np.exp(-((self.xx - lsx) ** 2 + (self.yy - lsy) ** 2) / (2 * R * R))
+            spill = cv2.GaussianBlur(fld, (0, 0), 38 * self.u * z) * (1 - amF)
             lampc = np.array([1.0, 0.84, 0.6], np.float32)
             out += (B * 1.5 * spill)[..., None] * lampc * st["bg"]
         for r2, a2 in placed:
             out *= (1 - a2)[..., None]
-            out += r2 * a2[..., None]
+            out += r2 * Ff * a2[..., None] if not isinstance(Ff, float) else r2 * Ff * a2[..., None]
+        if mglow is not None:
+            out += mglow * amF[..., None]
         # delante: cordel, lanas anudadas y perritos
         fg_rgb = np.zeros((H, W, 3), np.float32)
         fg_a = np.zeros((H, W), np.float32)
         self._cord(fg_rgb, fg_a, P, z, tau if dynamic else None, red_all)
+        if dynamic and not red_all:
+            self._front_wraps(fg_rgb, fg_a, P, z, tau)
         for hg in self.nbs + [self.main]:
             if hg is self.main:
                 if not wool_tied:
                     continue
                 ex, w_img = self.L.get("wool_exit"), self.L.get("wool_w", 8.5)
+                frac = 1.0
             else:
                 ex, w_img = hg.exit, hg.wool_w
+                frac = 1.0 if red_all and not dynamic else self.nb_progress(hg, tau)["up"]
             if ex is not None:
                 self._wool_up(fg_rgb, fg_a, hg, ex, P, z, w_img, M=poses.get(id(hg), (None,))[0],
-                              tau=tau if dynamic else None)
+                              tau=tau if dynamic else None, frac=frac)
         for hg in self.nbs + [self.main]:
             M, dth, pins2 = poses.get(id(hg), (None, 0.0, hg.pin_pts))
             for i, pw in enumerate(pins2):
@@ -697,16 +843,27 @@ class World:
                     spr = clothespin(sp, ang, self.pin_L * z, int(hg.pin_pts[i][0] * 7) % 1000)
                     _premult_over(fg_rgb, fg_a, spr, shadow=0.5)
         out *= (1 - fg_a)[..., None]
-        out += fg_rgb * F
-        # antes de coser: el hilo de la aguja cuelga desde fuera del cuadro
+        out += fg_rgb * Ff
+        # antes de coser: el hilo de la aguja baja desde fuera del cuadro (con su sombra en la tela)
         if dangle is not None:
             S = lambda q_: np.asarray(q_) @ P[:, :2].T + P[:, 2]
-            a_s = S(self.main.img_to_world(dangle))
-            y = Yarn(np.array([a_s, a_s + (2.0, -(a_s[1] + 40) * 0.5), (a_s[0] + 4, -40)]),
-                     2.4 * self.u * z * self.main.s * 1.6, "#141516", np.random.default_rng(3), fuzz=0, kind="floss")
+            e_s = S(self.main.img_to_world(dangle["eye"]))
+            t_s = S(self.main.img_to_world(dangle["top"]))
+            if t_s[1] < -20:
+                t_s = np.array([t_s[0], -60.0])
+            pts = catmull_rom(np.array([e_s, (e_s + t_s) / 2 + (3.0, 0), t_s]), 12)
+            w = 4.4 * self.main_u * z * self.main.s
+            y = Yarn(pts, w, "#141516", np.random.default_rng(3), fuzz=0, kind="floss")
+            shm = np.zeros((H, W), np.float32)
             for ch in y.chunks:
-                composite(out, ch, 0.35)
-        # luz de la sala, viñeta, parpadeo, grano y el leve bamboleo del cuadro (película)
+                _alpha_into(shm, ch)
+            u_ = self.u * z
+            shm = cv2.GaussianBlur(shm, (0, 0), 3.2 * u_)
+            shm = cv2.warpAffine(shm, np.float32([[1, 0, 10 * u_], [0, 1, 14 * u_]]), (W, H))
+            out *= (1 - 0.28 * shm * amF)[..., None]
+            for ch in y.chunks:
+                composite(out, ch, 0.0)
+        # luz de la sala (una ventana a la izquierda), viñeta, parpadeo, grano y el leve bamboleo de película
         out *= (self.rake * self.vign * (1 + flick))[..., None]
         out *= (1 + 0.012 * self.grain[k % len(self.grain)])[..., None]
         rj = np.random.default_rng(4000 + k)
@@ -715,6 +872,31 @@ class World:
             out = cv2.warpAffine(out, np.float32([[1, 0, jx], [0, 1, jy]]), (W, H), flags=cv2.INTER_LINEAR,
                                  borderMode=cv2.BORDER_REFLECT)
         return np.clip(out, 0, 1)
+
+
+def _alpha_into(m, sp):
+    H, W = m.shape
+    h, w = sp.a.shape
+    x0, y0 = sp.x0, sp.y0
+    cx0, cy0, cx1, cy1 = max(0, x0), max(0, y0), min(W, x0 + w), min(H, y0 + h)
+    if cx1 <= cx0 or cy1 <= cy0:
+        return
+    sl = (slice(cy0 - y0, cy1 - y0), slice(cx0 - x0, cx1 - x0))
+    m[cy0:cy1, cx0:cx1] = np.maximum(m[cy0:cy1, cx0:cx1], sp.a[sl])
+
+
+def _cut_path(pts, frac):
+    """Los primeros `frac` (0..1) del largo de un camino."""
+    pts = np.asarray(pts, np.float64)
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    arc = np.concatenate([[0], np.cumsum(seg)])
+    L = arc[-1] * frac
+    k = int(np.searchsorted(arc, L))
+    if k <= 0:
+        return pts[:1]
+    k = min(k, len(pts) - 1)
+    f = (L - arc[k - 1]) / max(1e-9, arc[k] - arc[k - 1])
+    return np.vstack([pts[:k], pts[k - 1] + (pts[k] - pts[k - 1]) * f])
 
 
 def _premult_over_local(rgb, a, sp, ox, oy, shadow=0.5):

@@ -146,8 +146,14 @@ def burlap(W, H, seed=3, ss=2, stencil=None):
                  float(rng.uniform(0.2, 0.6)), 1, cv2.LINE_AA, shift=2)
     col = col * (1 - 0.35 * fuzz[..., None]) + lin("#d9c29a")[None, None, :] * 0.35 * fuzz[..., None]
     if stencil is not None:     # tinta en el revés: apenas sugerida a contraluz
-        trc *= (1 - 0.42 * stencil)[..., None]
+        trc *= (1 - 0.62 * stencil)[..., None]
     return np.clip(col, 0, 1).astype(np.float32), hgt.astype(np.float32), np.clip(trc, 0, 1.2).astype(np.float32)
+
+
+def _mute(c, k):
+    c = np.asarray(c, np.float32)
+    g = float(c @ np.array([0.3, 0.55, 0.15], np.float32))
+    return (c + (g - c) * k).astype(np.float32)
 
 
 def fabric(shape, rng, color, kind="plain", color2=None, pitch=2.6, scale=1.0, angle=0.0):
@@ -159,6 +165,9 @@ def fabric(shape, rng, color, kind="plain", color2=None, pitch=2.6, scale=1.0, a
     h, w = shape
     base = lin(color) if isinstance(color, str) else np.asarray(color, np.float32)
     c2 = (lin(color2) if isinstance(color2, str) else np.asarray(color2, np.float32)) if color2 is not None else base * 0.6
+    # ropa usada, lavada muchas veces: los colores algo apagados
+    base = _mute(base, 0.12)
+    c2 = _mute(c2, 0.12)
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     if angle:
         c, s_ = np.cos(angle), np.sin(angle)
@@ -266,7 +275,11 @@ def transmission(rgb_lin, hgt, kind):
     c = np.clip(rgb_lin, 0, 1)
     mx = np.maximum(c.max(axis=-1, keepdims=True), 1e-3)
     luma = (c * np.array([0.3, 0.55, 0.15], np.float32)).sum(-1, keepdims=True)
-    tint = (c / mx) ** 1.35 * np.clip(luma, 0, 1) ** 0.3
+    tint = (c / mx) ** 1.6 * np.clip(luma, 0, 1) ** 0.35
+    # vitral profundo, no verde limón: los verdes se oscurecen hacia esmeralda
+    gray = tint.mean(axis=-1, keepdims=True)
+    tint = gray + (tint - gray) * 0.85
+    tint[..., 1] *= 0.86
     return (tint * (k * dens if np.ndim(dens) == 0 else k * dens[..., None])).astype(np.float32)
 
 

@@ -15,7 +15,7 @@ from .textile import burlap
 from .thread import Sprite, Stitch, Yarn, composite, composite_T, knot, running_stitch, blanket_stitch
 
 
-def stencil_mask(W, H, u, y0=0.30, mirror=False):
+def stencil_mask(W, H, u, y0=0.30, mirror=False, cx=0.58):
     """Estarcido del saco harinero. La tinta quedó en la cara de adelante, bajo los retazos: a contraluz
     se lee al derecho (mirror=True: visto desde atrás)."""
     import cairo
@@ -23,7 +23,7 @@ def stencil_mask(W, H, u, y0=0.30, mirror=False):
     surf = cairo.ImageSurface(cairo.FORMAT_A8, W, H)
     ctx = cairo.Context(surf)
     f = Font("Anton-Regular.ttf")
-    lines = [("HARINERA", 118), ("LA ESPERANZA", 62), ("50 KG · FLOR", 46)]
+    lines = [("HARINA", 132), ("MOLINO LA ESPERANZA", 50), ("FLOR · 50 KG", 50)]
     y = H * y0
     ctx.save()
     if mirror:
@@ -31,7 +31,7 @@ def stencil_mask(W, H, u, y0=0.30, mirror=False):
         ctx.scale(-1, 1)
     for text, cap in lines:
         cap *= u
-        w = Word(text, f, cap, W * 0.58, y + cap, 0.08, "center")
+        w = Word(text, f, cap, W * cx, y + cap, 0.08, "center")
         for L in w.letters:
             L.draw(ctx)
         y += cap * 1.35
@@ -40,7 +40,8 @@ def stencil_mask(W, H, u, y0=0.30, mirror=False):
     ctx.restore()
     surf.flush()
     buf = np.ndarray((H, surf.get_stride()), np.uint8, buffer=surf.get_data())[:, :W].astype(np.float32) / 255
-    # tinta de estarcido: bordes de plantilla, gastada
+    # tinta de estarcido: bordes de plantilla (algo corrida), gastada
+    buf = cv2.dilate(buf, np.ones((3, 3), np.uint8), iterations=max(1, int(round(1.5 * u))))
     rng = np.random.default_rng(9)
     wear = cv2.GaussianBlur(rng.random((H, W)).astype(np.float32), (0, 0), 2.0)
     m = buf * (0.45 + 0.55 * (wear > 0.47))
@@ -49,7 +50,7 @@ def stencil_mask(W, H, u, y0=0.30, mirror=False):
 
 # Composición: fracciones del ancho/alto (las medidas de objetos van en u, así no se deforman).
 LAND = dict(
-    sky=0.60, sun=(0.90, 0.15), clouds=[(0.20, 0.13, 0.13, 0.07), (0.45, 0.22, 0.10, 0.055), (0.66, 0.11, 0.09, 0.05)],
+    sky=0.60, sun=(0.90, 0.15), clouds=[(0.14, 0.12, 0.13, 0.07), (0.30, 0.225, 0.10, 0.055), (0.405, 0.08, 0.065, 0.04)],
     birds=[(0.56, 0.30, 1.0), (0.60, 0.27, 0.8), (0.63, 0.31, 0.7)],
     hills=[("#8a6f55", "flannel", "#6f5642", 0.46, [(0.08, 0.40), (0.30, 0.45), (0.52, 0.41)]),
            ("#6f8f55", "plain", None, 0.50, [(0.35, 0.44), (0.58, 0.47), (0.70, 0.45)]),
@@ -80,7 +81,7 @@ LAND = dict(
     araucarias=[(0.385, 0.505, 108), (0.425, 0.518, 88)],
 )
 TALL = dict(
-    sky=0.36, sun=(0.80, 0.075), clouds=[(0.26, 0.075, 0.30, 0.036), (0.56, 0.165, 0.22, 0.03)],
+    sky=0.36, sun=(0.80, 0.075), clouds=[(0.22, 0.042, 0.26, 0.026), (0.30, 0.20, 0.20, 0.026)],
     birds=[(0.40, 0.20, 1.0), (0.45, 0.185, 0.8), (0.49, 0.205, 0.7)],
     hills=[("#8a6f55", "flannel", "#6f5642", 0.30, [(0.10, 0.265), (0.36, 0.30), (0.60, 0.27)]),
            ("#6f8f55", "plain", None, 0.33, [(0.40, 0.29), (0.62, 0.31), (0.80, 0.30)]),
@@ -121,9 +122,12 @@ def build(W, H, seed=11):
     portrait = H > W
     Lz = TALL if portrait else LAND
 
-    col, hgt, T = burlap(W, H, seed=seed + 1, stencil=stencil_mask(W, H, u, y0=0.10 if portrait else 0.085))
+    col, hgt, T = burlap(W, H, seed=seed + 1, stencil=stencil_mask(W, H, u, y0=0.095 if portrait else 0.085,
+                                                                   cx=0.5 if portrait else 0.62))
     canvas = col.copy()
     T0 = T.copy()
+    from .thread import composite_T_piece
+    composite_T_piece.blur = cv2.GaussianBlur(T0, (0, 0), 2.4 * u)
     C = np.zeros((H, W), np.float32)
     info = {"layout": Lz, "portrait": portrait}
 
@@ -297,11 +301,10 @@ def build(W, H, seed=11):
         fx, fy = pp_[2 * i], pp_[2 * i + 1]
         spec = dict(fx=X(fx), base=Y(fy) - 6 * u, hgt=150 * u * rng.uniform(0.88, 1.12), dress=dc, dress_kind=dk,
                     dress2=d2, skin=skin, hair=hair, u=u)
-        spec["arms"] = ["down", "hip", "down", "hip"][i]
+        spec["arms"] = ["down", "down", "down", "hip"][i]
+        spec["kind"] = ["elder", "man", "woman", "child"][i]
         info["dolls"].append(spec)
-        lay = doll_layer(doll(spec["fx"], spec["base"], spec["hgt"], np.random.default_rng(700 + i), 0,
-                              dress=dc, dress_kind=dk, dress2=d2, skin=skin, hair=hair, arms=spec["arms"], u=u))
-        composite_T(T, lay)
+        # (la silueta a contraluz se calcula en cada imagen, según la pose)
 
     # --- borde de punto festón y orilla del saco --------------------------------------------------------------
     b = 26 * u
@@ -404,9 +407,10 @@ def _cable(spr, a, b, sag, u, rng):
 
 
 def _red_line(canvas, pts, u, rng):
-    y = Yarn(catmull_rom(np.array(pts), 16), 8.0 * u, "#c3241c", rng, couch_every=19 * u, couch_color="#8e160f")
-    y.draw(canvas, 1e9)
-    return y
+    """La lana roja de una arpillera vecina: NO se hornea; llega cuando le llega la alerta por el cordel.
+    Se arma al revés (del borde de arriba a la puerta) para poder bajarla de a poco."""
+    path = catmull_rom(np.array(pts), 16)[::-1]
+    return Yarn(path, 8.0 * u, "#c3241c", rng, couch_every=19 * u, couch_color="#8e160f")
 
 
 def exit_points(path, u, depth=26):
@@ -460,16 +464,17 @@ def build_desert(W, H, seed=31):
     _cable(spr, arms[0][1], arms[1][0], 14 * u, u, rng)
     _cable(spr, arms[1][1], (W - m, Y(0.40)), 18 * u, u, rng)
     _cable(spr, (m, Y(0.44)), arms[0][0], 18 * u, u, rng)
-    parts, _, door = house(X(0.24), Y(0.93), X(0.08), Y(0.11), rng, 0, wall="#d9a96c", roof="#8b5e3c",
-                           wall_kind="plain", roof_kind="cord", u=u)
+    parts, wins, door = house(X(0.24), Y(0.93), 110 * u, 96 * u, rng, 0, wall="#d9a96c", roof="#8b5e3c",
+                              wall_kind="plain", roof_kind="cord", u=u)
     for p_ in parts:
         bake(p_)
+    lit = [sp for w_ in wins for _, sp in w_]
     dd = doll(X(0.33), Y(0.97), 150 * u, rng, 0, dress="#6d3b7a", dress_kind="dots", dress2="#efe2c6",
               skin="#b07a55", hair="#1d1612", u=u)
     _bake_doll(dd, canvas, T)
     y = _red_line(canvas, [door, (X(0.40), Y(0.86)), (X(0.62), Y(0.64)), (X(0.66), Y(0.30)), (X(0.70), -20)], u, rng)
     _border(canvas, W, H, u, rng, color="#2f5a8a")
-    return canvas, exit_points(y.pts, u)
+    return dict(img=canvas, exit=exit_points(y.pts[::-1], u), red=y, lit=lit)
 
 
 def build_towers(W, H, seed=41):
@@ -498,14 +503,17 @@ def build_towers(W, H, seed=41):
         _cable(spr, arms[i][1], arms[i + 1][1], 16 * u, u, rng)
     _cable(spr, (m, Y(0.40)), arms[0][0], 20 * u, u, rng)
     _cable(spr, arms[-1][1], (W - m, Y(0.40)), 12 * u, u, rng)
+    lit = []
     for (fx, wall) in [(0.12, "#3f6fa5"), (0.84, "#b7342b")]:
-        parts, _, door = house(X(fx), Y(0.92), X(0.08), Y(0.11), rng, 0, wall=wall, roof="#6e6a66", u=u)
+        parts, wins, door = house(X(fx), Y(0.92), 110 * u, 96 * u, rng, 0, wall=wall, roof="#6e6a66", u=u)
         for p_ in parts:
             bake(p_)
+        if fx < 0.5:
+            lit = [sp for w_ in wins for _, sp in w_]
     dd = doll(X(0.20), Y(0.97), 150 * u, rng, 0, dress="#c0582f", dress_kind="gingham", dress2="#f0e3c8",
               skin="#c68e67", hair="#3a2a20", u=u)
     _bake_doll(dd, canvas, T)
     y = _red_line(canvas, [(X(0.13), Y(0.88)), (X(0.30), Y(0.70)), (X(0.48), Y(0.76)), (X(0.60), Y(0.40)),
                            (X(0.40), -20)], u, rng)
     _border(canvas, W, H, u, rng, color="#7a2e5a")
-    return canvas, exit_points(y.pts, u)
+    return dict(img=canvas, exit=exit_points(y.pts[::-1], u), red=y, lit=lit)
