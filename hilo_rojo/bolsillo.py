@@ -55,7 +55,7 @@ def render(W=1400, H=1000, seed=77):
     u = min(W, H) / 1080
     col, hgt, _ = burlap(W, H, seed=seed)
     # el estarcido del saco, al derecho (tinta azul desteñida, gastada)
-    ink = np.fliplr(stencil_mask(W, H, u * 1.25, y0=0.07))
+    ink = stencil_mask(W, H, u * 1.25, y0=0.07)
     tinta = lin("#34476a")
     col = col * (1 - 0.62 * ink[..., None]) + tinta[None, None, :] * 0.62 * ink[..., None]
     canvas = col.copy()

@@ -29,7 +29,7 @@
   }
 
   /* --- Hero: el contenedor alto da el recorrido; la arpillera queda fija --------------------------- */
-  .hero { position: relative; height: 900vh; }
+  .hero { position: relative; height: 960vh; }
   .hero__sticky { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; background: #cfc3ad; }
   .hero canvas { display: block; width: 100%; height: 100%; }
 
@@ -138,31 +138,37 @@
   <div class="hero__sticky">
     <h1 id="titulo" class="sr-only">Sistema de Alerta Temprana Comunitario</h1>
     <canvas id="arpillera" role="img"
-            aria-label="Una arpillera chilena cuelga de un cordel rojo: un valle de retazos con río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro una torre en el cerro, estacas, un aviso y una toma en el río; al tensar el hilo, la tela se frunce. A contraluz se ve el revés: es un solo hilo. La comunidad lo marca con lana roja y saca el hilván; la lana sube y es el cordel que une a otras arpilleras colgadas: una red de alerta."></canvas>
+            aria-label="Una arpillera chilena cuelga de un cordel de cáñamo: un valle de retazos con la cordillera, río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro estacas, un aviso, una toma de agua y el contorno de una torre de alta tensión; al tensar el hilo, la tela se frunce. A contraluz se ve el revés: es un solo hilo. La comunidad lo marca con lana roja, avisa casa por casa y una vecina saca el hilván; la lana sube al cordel y el rojo recorre las arpilleras de otros territorios: una red de alerta."></canvas>
     <ol class="stops" aria-live="polite">
-      <li class="stop" data-t0="0" data-t1="0.95">
-        <p class="stop__k">Conocer</p>
-        <p>Cada territorio es una trama: el río, los potreros, el agua potable rural, las casas y su gente.</p>
+      <li class="stop" data-t0="0" data-t1="0.99">
+        <p class="stop__k">Guía SATC · Conocer</p>
+        <p>Cada territorio es una trama: el río, los potreros, el agua potable rural, las casas y su gente.
+           <em>Algo está por coserse.</em></p>
       </li>
-      <li class="stop" data-t0="1.0" data-t1="3.3">
+      <li class="stop" data-t0="1.0" data-t1="3.7">
         <p class="stop__k">Vigilar</p>
-        <p>Todo megaproyecto empieza como un <em>hilván</em>: una torre de medición en el cerro, estacas en el potrero, un aviso en el cerco, una toma en el río.</p>
+        <p>Todo megaproyecto empieza como un <em>hilván</em>: estacas en el potrero, un aviso en el cerco, una toma
+           en el río… y la torre, todavía solo un contorno.</p>
       </li>
-      <li class="stop" data-t0="3.3" data-t1="4.08">
+      <li class="stop" data-t0="3.7" data-t1="4.42">
         <p class="stop__k">Vigilar</p>
         <p>Por delante parecen puntadas sueltas. Pero cuando el hilo se tensa, la tela se frunce entre las casas.</p>
       </li>
-      <li class="stop" data-t0="4.08" data-t1="6.4">
+      <li class="stop" data-t0="4.42" data-t1="7.5">
         <p class="stop__k">Alertar</p>
         <p>A contraluz aparece el revés: no eran señales sueltas. <em>Es un solo hilo.</em></p>
       </li>
-      <li class="stop" data-t0="6.4" data-t1="10.2">
+      <li class="stop" data-t0="7.5" data-t1="9.66">
         <p class="stop__k">Responder</p>
-        <p>La comunidad lo marca con lana roja, de casa en casa, y el hilván se saca antes de que sea costura.</p>
+        <p>La comunidad lo marca con lana roja y avisa casa por casa: se encienden las ventanas.</p>
       </li>
-      <li class="stop stop--end" data-t0="10.2" data-t1="99">
+      <li class="stop" data-t0="9.66" data-t1="11.1">
+        <p class="stop__k">Responder</p>
+        <p>Y el hilván se saca antes de que sea costura.</p>
+      </li>
+      <li class="stop stop--end" data-t0="11.1" data-t1="99">
         <p class="stop__k">Red Comunitaria de Alerta Energética</p>
-        <p>Y la lana roja es el cordel del que cuelgan otros territorios: <em>una red de alerta.</em></p>
+        <p>La lana roja llega al cordel del que cuelgan otros territorios: <em>una red de alerta.</em></p>
         <p><a href="#carta">Leer la carta ↓</a></p>
       </li>
     </ol>
@@ -209,15 +215,15 @@
 (() => {
   // --- Configuración --------------------------------------------------------------------------------
   const UFPS = 12;             // imágenes únicas por segundo (stop-motion «en dos»)
-  const TOTAL = 168;           // 14 s
+  const TOTAL = 180;           // 15 s
   const SETS = {
     landscape: { dir: "frames/landscape/", w: 16, h: 9 },
     tall:      { dir: "frames/tall/",      w: 9,  h: 16 },
   };
   // scroll (en alturas de pantalla) -> tiempo (s): con descansos donde se lee cada parada
-  const KEYS = [[0, 0], [0.7, 0.95], [2.4, 3.3], [2.9, 3.95], [3.2, 4.1], [4.3, 6.0], [4.7, 6.5],
-                [6.1, 9.95], [6.4, 10.2], [7.4, 11.75], [8.0, 14.0]];
-  const STOPS_T = [0.95, 3.3, 4.1, 6.4, 10.2];     // nudos del hilo de avance
+  const KEYS = [[0, 0], [0.6, 0.99], [2.5, 3.7], [3.1, 4.42], [3.4, 4.64], [4.5, 7.0], [4.8, 7.5],
+                [6.0, 9.66], [7.0, 11.1], [7.9, 12.7], [8.6, 15.0]];
+  const STOPS_T = [0.99, 3.7, 4.42, 7.5, 9.66, 11.1];   // nudos del hilo de avance
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const hero = document.getElementById("hero");

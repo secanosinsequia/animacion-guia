@@ -70,8 +70,13 @@ def weave(shape, rng, pitch=7.0, gap=0.28, wobble=1.6, slub=0.25, angle=0.0, jit
     per_v = rng.normal(0, 1, int(iv.max()) + 3)[iv.astype(np.int32)]
     along_u = smooth_noise(shape, pitch * 6, rng) - 0.5
     along_v = smooth_noise(shape, pitch * 6, rng) - 0.5
-    thick_u = 1 - gap + slub * along_u + irregular * 0.12 * per_u
-    thick_v = 1 - gap + slub * along_v + irregular * 0.12 * per_v
+    if irregular > 1.0:
+        # yute: grosor de hebra lognormal (algunas hebras gordas, otras casi cortadas)
+        thick_u = (1 - gap + slub * along_u) * np.exp(0.26 * irregular * per_u)
+        thick_v = (1 - gap + slub * along_v) * np.exp(0.26 * irregular * per_v)
+    else:
+        thick_u = 1 - gap + slub * along_u + irregular * 0.12 * per_u
+        thick_v = 1 - gap + slub * along_v + irregular * 0.12 * per_v
     du = np.abs(fu - 0.5) * 2 / np.clip(thick_u, 0.3, 1.25)
     dv = np.abs(fv - 0.5) * 2 / np.clip(thick_v, 0.3, 1.25)
     prof_u = np.sqrt(np.clip(1 - du * du, 0, 1))
@@ -100,8 +105,16 @@ def burlap(W, H, seed=3, ss=2, stencil=None):
     rng = np.random.default_rng(seed)
     W2, H2 = W * ss, H * ss
     shape = (H2, W2)
-    pitch = 6.6 * ss * max(W, H) / 1920
-    hgt, iu, iv, top_u = weave(shape, rng, pitch=pitch, gap=0.26, wobble=2.4 * ss, slub=0.45, irregular=0.9)
+    pitch = 8.8 * ss * max(W, H) / 1920
+    hgt, iu, iv, top_u = weave(shape, rng, pitch=pitch, gap=0.24, wobble=2.8 * ss, slub=0.5, irregular=1.35)
+    # nudos del yute: engrosamientos cortos aquí y allá
+    kn = np.zeros(shape, np.float32)
+    for _ in range(int(W2 * H2 / (pitch * pitch * 55))):
+        x, y = rng.uniform(0, W2), rng.uniform(0, H2)
+        cv2.ellipse(kn, (int(x), int(y)), (int(pitch * rng.uniform(0.5, 1.1)), int(pitch * 0.32)),
+                    float(rng.choice([0, 90])), 0, 360, 1.0, -1, cv2.LINE_AA)
+    kn = cv2.GaussianBlur(kn, (0, 0), pitch * 0.18)
+    hgt = np.clip(np.maximum(hgt, kn * 0.95 * (hgt > 0.02)) + 0.35 * kn, 0, 1)
     pal_u = rng.normal(0, 1, iu.max() - iu.min() + 3)
     pal_v = rng.normal(0, 1, iv.max() - iv.min() + 3)
     var = np.where(top_u, pal_u[iu - iu.min()], pal_v[iv - iv.min()]).astype(np.float32)
@@ -133,7 +146,7 @@ def burlap(W, H, seed=3, ss=2, stencil=None):
                  float(rng.uniform(0.2, 0.6)), 1, cv2.LINE_AA, shift=2)
     col = col * (1 - 0.35 * fuzz[..., None]) + lin("#d9c29a")[None, None, :] * 0.35 * fuzz[..., None]
     if stencil is not None:     # tinta en el revés: apenas sugerida a contraluz
-        trc *= (1 - 0.30 * stencil)[..., None]
+        trc *= (1 - 0.42 * stencil)[..., None]
     return np.clip(col, 0, 1).astype(np.float32), hgt.astype(np.float32), np.clip(trc, 0, 1.2).astype(np.float32)
 
 
@@ -152,6 +165,11 @@ def fabric(shape, rng, color, kind="plain", color2=None, pitch=2.6, scale=1.0, a
         xr, yr = xx * c + yy * s_, -xx * s_ + yy * c
     else:
         xr, yr = xx, yy
+    # la tela usada no es perfecta: el estampado se tuerce un poco (ondula ±1–2 px)
+    if kind not in ("felt", "satin"):
+        amp = 3.2 * max(0.6, scale)
+        xr = xr + (smooth_noise(shape, 70 * max(0.6, scale), rng) - 0.5) * amp
+        yr = yr + (smooth_noise(shape, 70 * max(0.6, scale), rng) - 0.5) * amp
     mix = np.zeros(shape, np.float32)
     if kind == "felt":
         hgt = 0.5 + 0.30 * (fbm(shape, 6 * scale, rng, octaves=3) - 0.5) + 0.15 * (rng.random(shape) - 0.5)
@@ -197,9 +215,18 @@ def fabric(shape, rng, color, kind="plain", color2=None, pitch=2.6, scale=1.0, a
         mix = ((xr // cell) % 3 == 0).astype(np.float32)
     elif kind == "dots":
         cell = pitch * scale * 8
-        gx = (xr / cell) % 1.0 - 0.5
-        gy_ = ((yr / cell) + 0.5 * ((xr // cell) % 2)) % 1.0 - 0.5
-        mix = (np.sqrt(gx * gx + gy_ * gy_) < 0.2).astype(np.float32)
+        ci = np.floor(xr / cell)
+        yy2 = (yr / cell) + 0.5 * (ci % 2)
+        cj = np.floor(yy2)
+        # cada lunar un poco corrido y de su propio tamaño (estampado a mano, tela gastada)
+        hsh = np.sin(ci * 12.9898 + cj * 78.233) * 43758.5453
+        r1 = hsh - np.floor(hsh)
+        hsh2 = np.sin(ci * 39.3468 + cj * 11.135) * 24634.6345
+        r2 = hsh2 - np.floor(hsh2)
+        gx = (xr / cell) % 1.0 - 0.5 - (r1 - 0.5) * 0.18
+        gy_ = yy2 % 1.0 - 0.5 - (r2 - 0.5) * 0.18
+        rad = 0.2 * (0.85 + 0.3 * r2)
+        mix = np.clip((rad - np.sqrt(gx * gx + gy_ * gy_)) * cell * 1.2 + 0.5, 0, 1).astype(np.float32)
     elif kind == "print":
         cell = pitch * scale * 11
         mix = np.zeros(shape, np.float32)
@@ -227,19 +254,19 @@ def fabric(shape, rng, color, kind="plain", color2=None, pitch=2.6, scale=1.0, a
     return np.clip(col * s[..., None], 0, 1).astype(np.float32), hgt
 
 
-TRANS_K = dict(plain=0.60, gingham=0.52, dots=0.50, stripes=0.52, print=0.46, flannel=0.40, cord=0.16, felt=0.02,
-               satin=0.42)
+TRANS_K = dict(plain=0.40, gingham=0.34, dots=0.33, stripes=0.34, print=0.30, flannel=0.24, cord=0.12, felt=0.02,
+               satin=0.28)
 
 
 def transmission(rgb_lin, hgt, kind):
     """Luz que atraviesa un retazo: su color (saturado) por la densidad de su tejido."""
     k = TRANS_K.get(kind, 0.3)
     dens = 0.55 + 0.9 * (1 - np.clip(hgt, 0, 1)) if kind not in ("felt", "cord") else 1.0
-    # a contraluz el tinte se satura (la luz atraviesa el teñido): color normalizado ** 1.8
+    # a contraluz el tinte se satura un poco (la luz atraviesa el teñido): color normalizado ** 1.35
     c = np.clip(rgb_lin, 0, 1)
     mx = np.maximum(c.max(axis=-1, keepdims=True), 1e-3)
     luma = (c * np.array([0.3, 0.55, 0.15], np.float32)).sum(-1, keepdims=True)
-    tint = (c / mx) ** 1.8 * np.clip(luma, 0, 1) ** 0.35
+    tint = (c / mx) ** 1.35 * np.clip(luma, 0, 1) ** 0.3
     return (tint * (k * dens if np.ndim(dens) == 0 else k * dens[..., None])).astype(np.float32)
 
 
@@ -252,8 +279,8 @@ def fray_mask(poly, shape, rng, offset=(0, 0), fray=1.0, felt=False, supersample
     cv2.fillPoly(m, [np.round(pts * 16).astype(np.int32)], 255, cv2.LINE_AA, shift=4)
     m = cv2.resize(m, (w, h), interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
     # borde irregular: desplazamiento de ruido fino
-    dx = (smooth_noise(shape, 6, rng) - 0.5) * 2.2 * fray
-    dy = (smooth_noise(shape, 6, rng) - 0.5) * 2.2 * fray
+    dx = (smooth_noise(shape, 9, rng) - 0.5) * 1.7 * fray
+    dy = (smooth_noise(shape, 9, rng) - 0.5) * 1.7 * fray
     gy, gx = np.mgrid[0:h, 0:w].astype(np.float32)
     m = cv2.remap(m, gx + dx, gy + dy, cv2.INTER_LINEAR)
     if felt:   # el fieltro no se deshilacha: borde algo difuso y velloso

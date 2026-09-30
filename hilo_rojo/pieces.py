@@ -15,6 +15,37 @@ from .thread import Sprite, composite, running_stitch
 UFPS = 12.0   # cuadros únicos por segundo (stop-motion «en dos» a 24 fps)
 
 
+def roughen(poly, rng, amp=1.8, wl=40.0, notch=0.02, step=4.0):
+    """Contorno cortado a tijera: ondulación de 1–3 px (longitud de onda 20–60 px) y alguna muesca."""
+    from satc_intro.geometry import resample
+    poly = np.asarray(poly, np.float64)
+    closed = np.vstack([poly, poly[:1]])
+    pts = resample(closed, step)[:-1]
+    n = len(pts)
+    if n < 6:
+        return poly
+    # normal hacia afuera (aprox.) de cada punto
+    tng = np.roll(pts, -1, axis=0) - np.roll(pts, 1, axis=0)
+    tng /= np.linalg.norm(tng, axis=1, keepdims=True) + 1e-9
+    nrm = np.stack([tng[:, 1], -tng[:, 0]], 1)
+    c = pts.mean(axis=0)
+    if np.mean(np.sum((pts - c) * nrm, axis=1)) < 0:
+        nrm = -nrm
+    arc = np.arange(n) * step
+    off = np.zeros(n)
+    for _ in range(3):
+        w_ = rng.uniform(0.5, 1.5) * wl
+        off += rng.normal(0, amp / 1.7) * np.sin(2 * np.pi * arc / w_ + rng.uniform(0, 2 * np.pi))
+    fine = rng.normal(0, amp * 0.35, n)
+    fine = np.convolve(np.concatenate([fine[-3:], fine, fine[:3]]), np.ones(7) / 7, mode="same")[3:-3]
+    off += fine
+    # muescas: la tijera se devolvió
+    for i in np.nonzero(rng.random(n) < notch)[0]:
+        k = np.arange(-2, 3)
+        off[(i + k) % n] -= amp * 1.1 * np.array([0.3, 0.8, 1.0, 0.8, 0.3])
+    return pts + nrm * off[:, None]
+
+
 def inset_poly(poly, d):
     """Encoge un polígono hacia su centroide (aprox.) para la puntada de borde."""
     poly = np.asarray(poly, np.float64)
@@ -26,11 +57,16 @@ def inset_poly(poly, d):
 
 class Piece:
     def __init__(self, poly, color, rng, kind="plain", color2=None, t_place=0.0, stitch=("#5a3b28", 8, 6, 1.9),
-                 fabric_scale=1.0, angle=0.0, felt=None, puff=1.0, shadow=0.5, fray=1.0, inset=5.5, margin=10):
+                 fabric_scale=1.0, angle=0.0, felt=None, puff=1.0, shadow=0.5, fray=1.0, inset=5.5, margin=10,
+                 rough=1.0, wear=1.0):
         poly = np.asarray(poly, np.float64)
+        if rough > 0:
+            size = float(min(np.ptp(poly[:, 0]), np.ptp(poly[:, 1])))
+            k = rough * float(np.clip(size / (140 * max(0.6, fabric_scale)), 0.2, 1.0))    # retazos chicos: tijera fina
+            poly = roughen(poly, rng, amp=1.0 * k * max(0.6, fabric_scale), wl=48 * max(0.6, fabric_scale) * max(0.4, k))
         self.poly = poly
         self.t_place = t_place
-        self.shadow_k = shadow
+        self.shadow_k = shadow * rng.uniform(0.72, 1.3)          # cada retazo tiene su grosor
         x0 = int(np.floor(poly[:, 0].min() - margin))
         y0 = int(np.floor(poly[:, 1].min() - margin))
         x1 = int(np.ceil(poly[:, 0].max() + margin))
@@ -38,6 +74,8 @@ class Piece:
         shape = (y1 - y0, x1 - x0)
         felt = (kind == "felt") if felt is None else felt
         fab, fh = fabric(shape, rng, color, kind=kind, color2=color2, scale=fabric_scale, angle=angle)
+        if wear > 0:
+            fab = _wear(fab, rng, wear, fabric_scale)
         m = fray_mask(poly, shape, rng, offset=(x0, y0), fray=fray, felt=felt)
         # acolchado: los bordes de la tela se redondean (luz arriba-izquierda, sombra abajo-derecha)
         body = cv2.GaussianBlur(m, (0, 0), 2.4)
@@ -50,8 +88,10 @@ class Piece:
         rgb_p = rgb * m[..., None]
         a = m.copy()
         # puntada corrida que fija el retazo
+        self.seam = None
         if stitch:
             scol, slen, sgap, sw = stitch
+            self.seam = (inset_poly(poly, inset), sw)       # por el revés la puntada corrida es continua
             loc = Sprite(0, 0, rgb_p, a, None)
             for _, sp in running_stitch(inset_poly(poly, inset), slen, sgap, sw, scol, rng, closed=True):
                 sp.x0 -= x0
@@ -83,6 +123,38 @@ class Piece:
             composite(canvas, sp, shadow=self.shadow_k * 0.8)
             return
         composite(canvas, self.sprite, shadow=self.shadow_k)
+
+
+def _wear(fab, rng, k, scale):
+    """Ropa usada: tono propio (±4 %), un lado desteñido, motas de pilling y alguna mancha tenue."""
+    from satc_intro.noise import smooth_noise
+    h, w = fab.shape[:2]
+    tone = 1 + rng.normal(0, 0.04) * k
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    ang = rng.uniform(0, 2 * np.pi)
+    grad = ((xx / max(w, 1) - 0.5) * np.cos(ang) + (yy / max(h, 1) - 0.5) * np.sin(ang))
+    fade = 1 + 0.07 * k * grad
+    out = fab * (tone * fade)[..., None]
+    # desteñido: el color se va hacia el gris claro donde más le dio el sol
+    lum = out.mean(axis=-1, keepdims=True)
+    wash = np.clip(0.10 * k * (grad + 0.5), 0, 0.12)[..., None]
+    out = out * (1 - wash) + (lum * 0.9 + 0.08) * wash
+    # pilling: bolitas de fibra
+    n = int(h * w / (900 * max(0.5, scale) ** 2) * k)
+    if n > 0:
+        pil = np.zeros((h, w), np.float32)
+        for _ in range(n):
+            cv2.circle(pil, (int(rng.uniform(0, w)), int(rng.uniform(0, h))), 1, float(rng.uniform(0.3, 0.7)), -1,
+                       cv2.LINE_AA)
+        pil = cv2.GaussianBlur(pil, (0, 0), 0.6)
+        out = out * (1 - 0.25 * pil[..., None]) + (lum * 1.25 + 0.03) * 0.25 * pil[..., None]
+    # una mancha tenue (agua, té) en algunos retazos
+    if rng.random() < 0.35 * k:
+        cx, cy, r = rng.uniform(0, w), rng.uniform(0, h), rng.uniform(0.15, 0.4) * max(w, h)
+        d = np.hypot(xx - cx, yy - cy) / r
+        ring = np.exp(-((d - 1) / 0.08) ** 2) * 0.05 + (d < 1) * 0.015
+        out *= (1 - ring * (0.8 + 0.4 * smooth_noise((h, w), 12, rng)))[..., None]
+    return np.clip(out, 0, 1).astype(np.float32)
 
 
 def _composite_premult(rgb, a, sp, shadow=0.5):

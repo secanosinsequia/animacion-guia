@@ -54,6 +54,46 @@ def hershey_strokes(text, font, height, x, y, anchor="left", tracking=0.0, ref=N
     return out, w
 
 
+_ACC = {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U",
+        "ñ": "n", "Ñ": "N"}
+
+
+def hershey_strokes_es(text, font, height, x, y, anchor="left", ref="H"):
+    """Como hershey_strokes, pero con tildes y eñes (las Hershey solo traen ASCII): se escribe la letra
+    base y se le borda el acento encima."""
+    base = "".join(_ACC.get(c, c) for c in text)
+    strokes, w = hershey_strokes(base, font, height, 0.0, y, anchor="left", ref=ref)
+    ox = x - (w / 2 if anchor == "center" else (w if anchor == "right" else 0))
+    out = [s_ + np.array([ox, 0.0]) for s_ in strokes]
+    for i, c in enumerate(text):
+        if c not in _ACC:
+            continue
+        pre = base[:i].rstrip()
+        x_pre = -1e9
+        if pre:
+            ps, _ = hershey_strokes(pre, font, height, 0.0, y, anchor="left", ref=ref)
+            x_pre = max(float(np.max(p_[:, 0])) for p_ in ps)
+        cs, _ = hershey_strokes(base[:i + 1], font, height, 0.0, y, anchor="left", ref=ref)
+        mine = [p_ for p_ in cs if float(np.min(p_[:, 0])) > x_pre - 0.5] or cs[-1:]
+        pts = np.vstack(mine)
+        if c in "íÍ":          # la i con tilde no lleva punto
+            dots = [p_ for p_ in mine if np.ptp(p_[:, 0]) < 0.15 * height and np.ptp(p_[:, 1]) < 0.15 * height]
+            for dt in dots:
+                for j, o in enumerate(out):
+                    if o.shape == dt.shape and np.allclose(o - np.array([ox, 0.0]), dt):
+                        out.pop(j)
+                        break
+        cx = float(pts[:, 0].mean()) + ox
+        top = float(pts[:, 1].min())
+        h = height
+        if c.lower() == "ñ":
+            xs = np.linspace(cx - 0.2 * h, cx + 0.2 * h, 9)
+            out.append(np.stack([xs, top - 0.18 * h - 0.06 * h * np.sin((xs - cx) / (0.2 * h) * np.pi)], 1))
+        else:
+            out.append(np.array([[cx - 0.06 * h, top - 0.1 * h], [cx + 0.12 * h, top - 0.32 * h]]))
+    return out, w
+
+
 # --- la aguja ---------------------------------------------------------------------------------------
 def _needle_shape(xx, yy, back, tip, width):
     d = tip - back
@@ -104,35 +144,65 @@ def needle_sprite(back, tip, width, hide_from=None, lift=1.0):
 
 
 # --- casas, árboles, sol, nubes ----------------------------------------------------------------------
+def _rot(poly, c, ang):
+    poly = np.asarray(poly, np.float64)
+    cs, sn = np.cos(ang), np.sin(ang)
+    d = poly - c
+    return np.stack([c[0] + d[:, 0] * cs - d[:, 1] * sn, c[1] + d[:, 0] * sn + d[:, 1] * cs], 1)
+
+
 def house(cx, base, w, h, rng, t, wall="#c0392b", roof="#6e6a66", wall_kind="plain", roof_kind="cord",
-          windows=1, door_side=0.0, u=1.0):
+          windows=1, door_side=0.0, u=1.0, vary=True):
+    """Casa de retazos. Con vary, cada casa sale distinta: proporciones, techo, puerta, ventanas y un
+    leve giro (cosida a mano, no calcada)."""
     parts = []
+    if vary:
+        w *= rng.uniform(0.88, 1.12)
+        h *= rng.uniform(0.86, 1.14)
+        door_side = float(np.clip(door_side + rng.normal(0, 0.18), -0.6, 0.6))
+        windows = int(rng.choice([1, 2], p=[0.55, 0.45]))
+    ang = np.deg2rad(rng.uniform(-3, 3)) if vary else 0.0
+    c0 = np.array([cx, base])
     x0, x1 = cx - w / 2, cx + w / 2
     top = base - h
     wall_poly = [(x0, base), (x0, top), (x1, top), (x1, base)]
-    parts.append(Piece(wall_poly, wall, rng, kind=wall_kind, t_place=t, stitch=("#3d2a1e", 7 * u, 5 * u, 1.6 * u),
-                       fabric_scale=u))
-    ov = w * 0.12
-    roof_poly = [(x0 - ov, top + 4 * u), (cx - w * 0.08, top - h * 0.62), (cx + w * 0.08, top - h * 0.62),
-                 (x1 + ov, top + 4 * u)]
-    parts.append(Piece(roof_poly, roof, rng, kind=roof_kind, t_place=t, stitch=("#2b2622", 7 * u, 5 * u, 1.6 * u),
-                       fabric_scale=u, angle=np.pi / 2))
-    dw, dh = w * 0.24, h * 0.52
-    dx = cx + door_side * w * 0.22
-    parts.append(Piece([(dx - dw / 2, base), (dx - dw / 2, base - dh), (dx + dw / 2, base - dh), (dx + dw / 2, base)],
-                       "#5a3a22", rng, kind="felt", t_place=t, stitch=None, inset=3, margin=6))
+    parts.append(Piece(_rot(wall_poly, c0, ang), wall, rng, kind=wall_kind, t_place=t,
+                       stitch=("#3d2a1e", 7 * u, 5 * u, 1.6 * u), fabric_scale=u))
+    ov = w * (rng.uniform(0.06, 0.16) if vary else 0.12)
+    rise = h * (rng.uniform(0.45, 0.80) if vary else 0.62)
+    ridge = w * (rng.uniform(0.0, 0.14) if vary else 0.08)
+    roof_poly = [(x0 - ov, top + 4 * u), (cx - ridge, top - rise), (cx + ridge, top - rise), (x1 + ov, top + 4 * u)]
+    parts.append(Piece(_rot(roof_poly, c0, ang), roof, rng, kind=roof_kind, t_place=t,
+                       stitch=("#2b2622", 7 * u, 5 * u, 1.6 * u), fabric_scale=u, angle=np.pi / 2 + ang))
+    dw, dh = w * rng.uniform(0.2, 0.27), h * rng.uniform(0.46, 0.58)
+    dx = cx + door_side * w * 0.36
+    door_poly = [(dx - dw / 2, base), (dx - dw / 2, base - dh), (dx + dw / 2, base - dh), (dx + dw / 2, base)]
+    parts.append(Piece(_rot(door_poly, c0, ang), "#5a3a22", rng, kind="felt", t_place=t, stitch=None, inset=3,
+                       margin=6))
     wins = []
-    for k in range(windows):
-        wx = cx - door_side * w * 0.22 + (k - (windows - 1) / 2) * w * 0.30
-        ww = w * 0.2
-        wy = top + h * 0.22
-        poly = [(wx - ww / 2, wy), (wx + ww / 2, wy), (wx + ww / 2, wy + ww), (wx - ww / 2, wy + ww)]
-        parts.append(Piece(poly, "#2c3440", rng, kind="felt", t_place=t, stitch=None, margin=6))
-        lit = satin_fill([(p[0] + 1.2 * u, p[1] + 1.2 * u) if i == 0 else p for i, p in enumerate(poly)],
-                         np.deg2rad(8), 2.1 * u, 2.4 * u, "#f3c33a", rng)
+    # ventanas en el lado opuesto a la puerta (o a ambos lados si hay dos)
+    slots = [cx - door_side * w * 0.30] if windows == 1 else [x0 + w * 0.22, x1 - w * 0.22]
+    for wx in slots:
+        if abs(wx - dx) < dw * 0.9:
+            wx = dx + np.sign(wx - dx + 1e-6) * dw * 1.1
+        ww = w * rng.uniform(0.15, 0.21)
+        wh = ww * rng.uniform(0.9, 1.25)
+        wy = top + h * rng.uniform(0.16, 0.26)
+        poly = _rot([(wx - ww / 2, wy), (wx + ww / 2, wy), (wx + ww / 2, wy + wh), (wx - ww / 2, wy + wh)], c0, ang)
+        parts.append(Piece(poly, "#2c3440", rng, kind="felt", t_place=t, stitch=None, margin=6, rough=0.6))
+        # la ventana encendida: relleno de satín amarillo (se cose encima cuando llega la alerta)
+        lit = satin_fill(inset_poly_simple(poly, 1.3 * u), np.deg2rad(8) + ang, 2.1 * u, 2.4 * u, "#f3c33a", rng)
         wins.append(lit)
-    door_x = dx
-    return parts, wins, (door_x, base - dh * 0.45)
+    door = _rot([(dx, base - dh * 0.45)], c0, ang)[0]
+    return parts, wins, (door[0], door[1])
+
+
+def inset_poly_simple(poly, d):
+    poly = np.asarray(poly, np.float64)
+    c = poly.mean(axis=0)
+    v = poly - c
+    n = np.linalg.norm(v, axis=1, keepdims=True) + 1e-9
+    return c + v * np.clip((n - d) / n, 0.2, 1.0)
 
 
 def round_tree(cx, base, r, rng, t, color="#3f6b3c", u=1.0):
@@ -193,66 +263,183 @@ def cloud(cx, cy, w, h, rng, t, u=1.0):
 
 # --- muñecas de tela (los «monitos» de la arpillera) -------------------------------------------------
 def doll(fx, base, hgt, rng, t, dress="#2f6fa6", dress_kind="dots", dress2="#f2eadb", skin="#c68e67",
-         hair="#1f1712", hand_y=None, arms="up", u=1.0):
-    """Muñeca cosida: vestido de retazo, cabeza rellena, pelo de lana, brazos de lana tomando el hilo."""
-    head_r = hgt * 0.16
+         hair="#1f1712", hand_y=None, arms="down", u=1.0, lean=0.0, hands=None):
+    """Muñeca cosida: vestido de retazo, cabeza de lana enrollada, pelo de lana, brazos de lana.
+    arms: "down" (a los costados), "hip" (en jarras), "wave" (una arriba), "up" (las dos arriba).
+    hands: puntos (izq, der) para poses especiales (p. ej. tirando de un hilo)."""
+    rg = np.random.default_rng(int(fx * 7 + base * 3) % (1 << 30))     # misma muñeca en todas sus poses
+    head_r = hgt * 0.15 * rg.uniform(0.92, 1.08)
     neck_y = base - hgt * 0.68
     hip_y = base - hgt * 0.22
-    dress_poly = [(fx - hgt * 0.10, neck_y), (fx + hgt * 0.10, neck_y), (fx + hgt * 0.24, hip_y + hgt * 0.02),
-                  (fx - hgt * 0.24, hip_y + hgt * 0.02)]
-    body = Piece(dress_poly, dress, rng, kind=dress_kind, color2=dress2, t_place=t, stitch=("#2a2019", 5 * u, 4 * u,
-                                                                                           1.3 * u),
-                 fabric_scale=u * 0.8, margin=8, inset=3.5)
-    legs = [Yarn([(fx - hgt * 0.07, hip_y), (fx - hgt * 0.08, base - 2)], 3.2 * u, "#2a2019", rng, fuzz=0.4),
-            Yarn([(fx + hgt * 0.07, hip_y), (fx + hgt * 0.08, base - 2)], 3.2 * u, "#2a2019", rng, fuzz=0.4)]
-    hy = hand_y if hand_y is not None else neck_y - hgt * 0.10
-    sh_l = (fx - hgt * 0.10, neck_y + hgt * 0.05)
-    sh_r = (fx + hgt * 0.10, neck_y + hgt * 0.05)
-    hand_l = np.array([fx - hgt * 0.30, hy])
-    hand_r = np.array([fx + hgt * 0.30, hy])
-    arm_l = Yarn(catmull_rom(np.array([sh_l, ((sh_l[0] + hand_l[0]) / 2 - 3 * u, (sh_l[1] + hand_l[1]) / 2 + 4 * u),
-                                       hand_l]), 6), 3.4 * u, skin, rng, fuzz=0.3)
-    arm_r = Yarn(catmull_rom(np.array([sh_r, ((sh_r[0] + hand_r[0]) / 2 + 3 * u, (sh_r[1] + hand_r[1]) / 2 + 4 * u),
-                                       hand_r]), 6), 3.4 * u, skin, rng, fuzz=0.3)
-    # cabeza rellena: esfera de tela con luz fuerte
+    sw = rg.uniform(0.21, 0.27)
+    dress_poly = [(fx - hgt * 0.10, neck_y), (fx + hgt * 0.10, neck_y), (fx + hgt * sw, hip_y + hgt * 0.02),
+                  (fx - hgt * sw, hip_y + hgt * 0.02)]
+    body = Piece(dress_poly, dress, rg, kind=dress_kind, color2=dress2, t_place=t,
+                 stitch=("#2a2019", 5 * u, 4 * u, 1.3 * u), fabric_scale=u * 0.8, margin=8, inset=3.5, puff=1.8,
+                 shadow=0.75)
+    lx = rg.uniform(0.06, 0.09)
+    legs = [Yarn([(fx - hgt * lx, hip_y), (fx - hgt * (lx + 0.01), base - 2)], 3.2 * u, "#2a2019", rg, fuzz=0.4),
+            Yarn([(fx + hgt * lx, hip_y), (fx + hgt * (lx + 0.01), base - 2)], 3.2 * u, "#2a2019", rg, fuzz=0.4)]
+    sh_l = np.array([fx - hgt * 0.10, neck_y + hgt * 0.05])
+    sh_r = np.array([fx + hgt * 0.10, neck_y + hgt * 0.05])
+    head_top = neck_y - head_r * 1.9
+    if hands is not None:
+        hand_l, hand_r = np.asarray(hands[0], np.float64), np.asarray(hands[1], np.float64)
+    else:
+        hy = hand_y if hand_y is not None else neck_y + hgt * 0.26
+        down_l, down_r = np.array([fx - hgt * 0.27, hy]), np.array([fx + hgt * 0.27, hy])
+        up_l = np.array([fx - hgt * 0.30, head_top - hgt * 0.02])
+        up_r = np.array([fx + hgt * 0.30, head_top - hgt * 0.02])
+        hip_l = np.array([fx - hgt * 0.20, hip_y - hgt * 0.02])
+        hip_r = np.array([fx + hgt * 0.20, hip_y - hgt * 0.02])
+        hand_l, hand_r = {"down": (down_l, down_r), "hip": (hip_l, hip_r), "wave": (down_l, up_r),
+                          "up": (up_l, up_r)}[arms]
+
+    def arm(sh, hand, side):
+        mid = (sh + hand) / 2 + np.array([side * 5 * u, 3 * u])
+        if hand[1] < sh[1] - hgt * 0.1:           # brazo arriba: el codo hacia afuera
+            mid = (sh + hand) / 2 + np.array([side * hgt * 0.10, 0])
+        return Yarn(catmull_rom(np.array([sh, mid, hand]), 6), 3.4 * u, skin, rg, fuzz=0.3)
+
+    arm_l, arm_r = arm(sh_l, hand_l, -1), arm(sh_r, hand_r, 1)
     hc = (fx, neck_y - head_r * 0.92)
-    head = stuffed_head(hc, head_r, skin, rng)
+    head = yarn_head(hc, head_r, skin, rg, u)
     hair_y = []
-    for k in range(9):
-        a = np.pi * (0.95 + 1.1 * k / 8)
+    nh = int(rg.integers(7, 11))
+    style = rg.integers(0, 3)          # 0 trenzas/mechas largas, 1 corto, 2 tomate
+    for k in range(nh):
+        a = np.pi * (0.95 + 1.1 * k / (nh - 1))
         p = (hc[0] + np.cos(a) * head_r * 0.92, hc[1] + np.sin(a) * head_r * 0.92)
-        L = head_r * (1.25 if k in (0, 8) else 1.12)
-        q = (hc[0] + np.cos(a) * L, hc[1] + np.sin(a) * L + (head_r * 0.9 if k in (0, 8) else 0))
-        hair_y.append(Yarn(catmull_rom(np.array([p, ((p[0] + q[0]) / 2 + rng.normal(0, 1), (p[1] + q[1]) / 2 - 2 * u),
-                                                 q]), 5), 3.4 * u, hair, rng, fuzz=0.8))
-    eyes = []   # sin carita: como en las arpilleras
-    shoes = [knot((fx - hgt * 0.08, base - 1), 2.4 * u, "#1a1410", rng),
-             knot((fx + hgt * 0.08, base - 1), 2.4 * u, "#1a1410", rng)]
-    return dict(t=t, body=body, legs=legs, arms=[arm_l, arm_r], head=head, hair=hair_y, eyes=eyes, shoes=shoes,
-                hands=(hand_l, hand_r))
+        L = head_r * (1.25 if k in (0, nh - 1) else 1.12) * (0.9 if style == 1 else 1.0)
+        drop = head_r * (0.9 if style == 0 else 0.3) if k in (0, nh - 1) else 0
+        q = (hc[0] + np.cos(a) * L, hc[1] + np.sin(a) * L + drop)
+        hair_y.append(Yarn(catmull_rom(np.array([p, ((p[0] + q[0]) / 2 + rg.normal(0, 1), (p[1] + q[1]) / 2 - 2 * u),
+                                                 q]), 5), 3.4 * u, hair, rg, fuzz=0.8))
+    if style == 2:
+        hair_y.append(Yarn(np.array([(hc[0] - 4 * u, hc[1] - head_r * 1.05), (hc[0] + 4 * u, hc[1] - head_r * 1.25)]),
+                           7 * u, hair, rg, fuzz=0.9))
+    shoes = [knot((fx - hgt * (lx + 0.01), base - 1), 2.4 * u, "#1a1410", rg),
+             knot((fx + hgt * (lx + 0.01), base - 1), 2.4 * u, "#1a1410", rg)]
+    return dict(t=t, body=body, legs=legs, arms=[arm_l, arm_r], head=head, hair=hair_y, eyes=[], shoes=shoes,
+                hands=(hand_l, hand_r), foot=np.array([fx, base]), lean=lean)
 
 
-def stuffed_head(c, r, color, rng):
-    col = lin(color)
+def yarn_head(c, r, color, rng, u=1.0):
+    """Cabeza de muñeca de arpillera: una bola de lana enrollada (no una esfera de computador)."""
     cx, cy = c
-    pad = r * 1.6 + 4
+    pad = r * 1.4 + 6
     x0, y0 = int(cx - pad), int(cy - pad)
-    x1, y1 = int(cx + pad), int(cy + pad)
-    shape = (y1 - y0, x1 - x0)
-    fab, _ = fabric(shape, rng, color, kind="plain", pitch=1.8)
-    yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float32) + 0.5
+    n = int(2 * pad) + 1
+    yy, xx = np.mgrid[y0:y0 + n, x0:x0 + n].astype(np.float32) + 0.5
+    d = np.hypot(xx - cx, yy - cy)
+    disc = np.clip(r - d + 0.5, 0, 1).astype(np.float32)
+    layer = np.zeros((n, n, 3), np.float32)
+    la = np.zeros((n, n), np.float32)
+    # vueltas de lana: arcos cruzados en varias direcciones, como un ovillo
+    wy = max(2.2 * u, r * 0.22)
+    for k in range(9):
+        ang = rng.uniform(0, np.pi)
+        off = rng.uniform(-0.75, 0.75) * r
+        t = np.linspace(-1, 1, 24)
+        ca, sa = np.cos(ang), np.sin(ang)
+        span = np.sqrt(max(r * r - off * off, 1)) * 1.02
+        pts = np.stack([cx + ca * t * span - sa * off, cy + sa * t * span + ca * off], 1)
+        ytmp = Yarn(pts, wy, color, rng, fuzz=0.25, chunk=64)
+        for ch in ytmp.chunks:
+            sh_ = ch.a.shape
+            xs0, ys0 = ch.x0 - x0, ch.y0 - y0
+            xa, ya = max(0, xs0), max(0, ys0)
+            xb, yb = min(n, xs0 + sh_[1]), min(n, ys0 + sh_[0])
+            if xb <= xa or yb <= ya:
+                continue
+            sl = (slice(ya - ys0, yb - ys0), slice(xa - xs0, xb - xs0))
+            a_ = ch.a[sl]
+            layer[ya:yb, xa:xb] = layer[ya:yb, xa:xb] * (1 - a_[..., None]) + ch.rgb[sl]
+            la[ya:yb, xa:xb] = la[ya:yb, xa:xb] * (1 - a_) + a_
+    base = lin(color)
+    under = base[None, None, :] * 0.55                           # el relleno se ve entre vueltas
+    rgb = layer + under * (1 - la)[..., None]
+    # volumen suave (bola rellena, luz rasante), sin brillo de plástico
     dx, dy = (xx - cx) / r, (yy - cy) / r
-    rr = np.sqrt(dx * dx + dy * dy)
-    a = np.clip((1 - rr) * r + 0.5, 0, 1).astype(np.float32)
-    nz = np.sqrt(np.clip(1 - rr * rr, 0, 1))
-    L = np.array([-0.55, -0.62, 0.56])
-    L /= np.linalg.norm(L)
-    lam = np.clip(dx * L[0] + dy * L[1] + nz * L[2], 0, 1)
-    shade_ = 0.35 + 0.85 * lam
-    rgb = fab * shade_[..., None] * a[..., None]
-    sh = cv2.GaussianBlur(a, (0, 0), r * 0.3)
-    sh = cv2.warpAffine(sh, np.float32([[1, 0, r * 0.25], [0, 1, r * 0.32]]), (shape[1], shape[0]))
-    return Sprite(x0, y0, rgb.astype(np.float32), a, sh)
+    nz = np.sqrt(np.clip(1 - dx * dx - dy * dy, 0, 1))
+    lam = np.clip(-0.64 * dx - 0.56 * dy + 0.52 * nz, 0, 1)
+    rgb *= (0.62 + 0.55 * lam)[..., None]
+    rgb *= disc[..., None]
+    sh = cv2.GaussianBlur(disc, (0, 0), r * 0.35)
+    sh = cv2.warpAffine(sh, np.float32([[1, 0, r * 0.3], [0, 1, r * 0.38]]), (n, n))
+    return Sprite(x0, y0, rgb.astype(np.float32), disc, sh)
+
+
+def doll_layer(d, lean=0.0):
+    """Toda la muñeca en una capa premultiplicada (para posarla o cambiarla de pose cuadro a cuadro)."""
+    parts = []
+    for y in d["legs"]:
+        parts += y.chunks
+    parts.append(d["body"].sprite)
+    parts += d["shoes"]
+    parts.append(d["head"])
+    for y in d["hair"] + d["arms"]:
+        parts += y.chunks
+    x0 = min(p.x0 for p in parts) - 14
+    y0 = min(p.y0 for p in parts) - 14
+    x1 = max(p.x0 + p.a.shape[1] for p in parts) + 18
+    y1 = max(p.y0 + p.a.shape[0] for p in parts) + 18
+    h, w = y1 - y0, x1 - x0
+    rgb = np.zeros((h, w, 3), np.float32)
+    a = np.zeros((h, w), np.float32)
+    for p in parts:
+        shadow = 0.75 if p is d["body"].sprite else 0.5
+        _over_local(rgb, a, p, x0, y0, shadow)
+    if lean:
+        fx, fy = d["foot"] - np.array([x0, y0])
+        M = cv2.getRotationMatrix2D((float(fx), float(fy)), float(np.rad2deg(-lean)), 1.0)
+        rgb = cv2.warpAffine(rgb, M, (w, h), flags=cv2.INTER_LINEAR)
+        a = cv2.warpAffine(a, M, (w, h), flags=cv2.INTER_LINEAR)
+    return Sprite(x0, y0, rgb, a, None)
+
+
+def _over_local(rgb, a, sp, ox, oy, shadow):
+    H, W = a.shape
+    h, w = sp.a.shape
+    x0, y0 = sp.x0 - ox, sp.y0 - oy
+    cx0, cy0, cx1, cy1 = max(0, x0), max(0, y0), min(W, x0 + w), min(H, y0 + h)
+    if cx1 <= cx0 or cy1 <= cy0:
+        return
+    sl = (slice(cy0 - y0, cy1 - y0), slice(cx0 - x0, cx1 - x0))
+    reg_rgb, reg_a = rgb[cy0:cy1, cx0:cx1], a[cy0:cy1, cx0:cx1]
+    if sp.sh is not None and shadow > 0:
+        s_ = shadow * sp.sh[sl] * (1 - sp.a[sl])
+        reg_rgb *= (1 - s_)[..., None]
+        reg_a += s_ * (1 - reg_a)
+    sa = sp.a[sl]
+    reg_rgb *= (1 - sa)[..., None]
+    reg_rgb += sp.rgb[sl]
+    reg_a *= (1 - sa)
+    reg_a += sa
+
+
+def cordillera(W, H, y_base, peaks, rng, u=1.0):
+    """La cordillera de los Andes al fondo: fieltro gris azulado con nieve de fieltro blanco."""
+    X = lambda f: f * W
+    Y = lambda f: f * H
+    pts = [(X(-0.02), Y(y_base))]
+    for (px, py, pw) in peaks:
+        pts += [(X(px - pw), Y(y_base) - (Y(y_base) - Y(py)) * 0.35), (X(px), Y(py)),
+                (X(px + pw), Y(y_base) - (Y(y_base) - Y(py)) * 0.4)]
+    pts.append((X(1.02), Y(y_base)))
+    line = catmull_rom(np.array(pts), 3)
+    poly = np.vstack([line, [(X(1.02), Y(y_base) + 60 * u), (X(-0.02), Y(y_base) + 60 * u)]])
+    parts = [Piece(poly, "#8e9db4", rng, kind="flannel", color2="#7d8ca3", stitch=("#4f5a6b", 8 * u, 6 * u, 1.6 * u),
+                   fabric_scale=u)]
+    for (px, py, pw) in peaks:
+        top = np.array([X(px), Y(py)])
+        dep = (Y(y_base) - Y(py)) * rng.uniform(0.28, 0.4)
+        wl, wr = X(pw) * 0.42, X(pw) * 0.42
+        snow = [top + (0, -2 * u), top + (wr, dep * 0.95), top + (wr * 0.55, dep * 0.7), top + (wr * 0.2, dep * 1.05),
+                top + (-wl * 0.25, dep * 0.75), top + (-wl * 0.6, dep * 1.0), top + (-wl, dep * 0.9)]
+        parts.append(Piece(snow, "#f2f0ea", rng, kind="felt", stitch=("#b8b6ae", 5 * u, 4 * u, 1.2 * u),
+                           fabric_scale=u, margin=8))
+    return parts
 
 
 def draw_doll(canvas, d, t, lift=False):

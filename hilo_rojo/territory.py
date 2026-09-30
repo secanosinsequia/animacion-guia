@@ -8,14 +8,16 @@ import numpy as np
 
 from satc_intro.color import lin
 from satc_intro.geometry import catmull_rom, ridge, resample
-from .figures import (house, round_tree, sun, cloud, doll, draw_doll, hershey_strokes, _yarn_full)
+from .figures import (house, round_tree, araucaria, sun, cloud, doll, doll_layer, cordillera, hershey_strokes,
+                      _yarn_full)
 from .pieces import Piece, ellipse_poly
 from .textile import burlap
 from .thread import Sprite, Stitch, Yarn, composite, composite_T, knot, running_stitch, blanket_stitch
 
 
-def stencil_mask(W, H, u, y0=0.30):
-    """Estarcido del saco harinero, visto desde el frente en espejo (la tinta está en el revés)."""
+def stencil_mask(W, H, u, y0=0.30, mirror=False):
+    """Estarcido del saco harinero. La tinta quedó en la cara de adelante, bajo los retazos: a contraluz
+    se lee al derecho (mirror=True: visto desde atrás)."""
     import cairo
     from satc_intro.typography import Font, Word
     surf = cairo.ImageSurface(cairo.FORMAT_A8, W, H)
@@ -24,8 +26,9 @@ def stencil_mask(W, H, u, y0=0.30):
     lines = [("HARINERA", 118), ("LA ESPERANZA", 62), ("50 KG · FLOR", 46)]
     y = H * y0
     ctx.save()
-    ctx.translate(W, 0)
-    ctx.scale(-1, 1)                     # en espejo
+    if mirror:
+        ctx.translate(W, 0)
+        ctx.scale(-1, 1)
     for text, cap in lines:
         cap *= u
         w = Word(text, f, cap, W * 0.58, y + cap, 0.08, "center")
@@ -71,8 +74,10 @@ LAND = dict(
     trees=[(0.30, 0.60, 24), (0.64, 0.66, 22), (0.95, 0.66, 26), (0.03, 0.66, 22), (0.60, 0.99, 28)],
     sheep=[(0.78, 0.76), (0.86, 0.78), (0.72, 0.79)],
     people=[0.055, 0.905, 0.375, 0.985, 0.595, 0.700, 0.93, 0.985],
-    stakes=[(0.585 + 0.026 * k, 0.800 + 0.006 * k) for k in range(4)],
+    stakes=[(0.575 + 0.034 * k, 0.800 + 0.007 * k) for k in range(4)],
     intake=((0.292, 0.622), (0.262, 0.652)),
+    andes=(0.47, [(0.10, 0.305, 0.09), (0.27, 0.262, 0.12), (0.47, 0.315, 0.09), (0.63, 0.27, 0.11), (0.88, 0.315, 0.1)]),
+    araucarias=[(0.385, 0.505, 108), (0.425, 0.518, 88)],
 )
 TALL = dict(
     sky=0.36, sun=(0.80, 0.075), clouds=[(0.26, 0.075, 0.30, 0.036), (0.56, 0.165, 0.22, 0.03)],
@@ -99,9 +104,11 @@ TALL = dict(
     apr=(0.21, 0.785),
     trees=[(0.46, 0.44, 24), (0.93, 0.53, 26), (0.05, 0.49, 22), (0.70, 0.99, 28), (0.30, 0.86, 24)],
     sheep=[(0.78, 0.66), (0.88, 0.675), (0.70, 0.69)],
-    people=[0.07, 0.70, 0.27, 0.985, 0.80, 0.50, 0.94, 0.975],
-    stakes=[(0.555 + 0.045 * k, 0.725 + 0.004 * k) for k in range(4)],
+    people=[0.07, 0.70, 0.27, 0.985, 0.44, 0.712, 0.94, 0.975],
+    stakes=[(0.545 + 0.055 * k, 0.725 + 0.005 * k) for k in range(4)],
     intake=((0.345, 0.620), (0.300, 0.635)),
+    andes=(0.30, [(0.14, 0.205, 0.15), (0.46, 0.17, 0.17), (0.82, 0.195, 0.15)]),
+    araucarias=[(0.37, 0.335, 96), (0.455, 0.345, 80)],
 )
 
 
@@ -114,14 +121,18 @@ def build(W, H, seed=11):
     portrait = H > W
     Lz = TALL if portrait else LAND
 
-    col, hgt, T = burlap(W, H, seed=seed + 1, stencil=stencil_mask(W, H, u, y0=0.10 if portrait else 0.30))
+    col, hgt, T = burlap(W, H, seed=seed + 1, stencil=stencil_mask(W, H, u, y0=0.10 if portrait else 0.085))
     canvas = col.copy()
     T0 = T.copy()
     C = np.zeros((H, W), np.float32)
     info = {"layout": Lz, "portrait": portrait}
 
+    seams = []
+
     def bake(piece):
         piece.bake(canvas, T, T0, C)
+        if getattr(piece, "seam", None) is not None:
+            seams.append(piece.seam)
 
     def bake_sprite(sp, shadow=0.5):
         composite(canvas, sp, shadow)
@@ -150,6 +161,10 @@ def build(W, H, seed=11):
         for p0, p1 in (((cxb - w_, cyb - w_ * 0.5), (cxb, cyb)), ((cxb, cyb), (cxb + w_, cyb - w_ * 0.55))):
             bake_sprite(Stitch.render(p0, p1, 2.2 * u, "#2a2522", rng))
 
+    # --- la cordillera, al fondo ---------------------------------------------------------------------
+    yb, pk = Lz["andes"]
+    for p_ in cordillera(W, H, yb, pk, rng, u=u):
+        bake(p_)
     # --- cerros de fondo --------------------------------------------------------------------------------
     for colr, kind, c2, base_f, peaks in Lz["hills"]:
         pts = [(m - 10, Y(base_f))] + [P(px, py) for px, py in peaks] + [(W - m + 10, Y(base_f + 0.02))]
@@ -173,6 +188,13 @@ def build(W, H, seed=11):
         colr = ["#29462c", "#34553a", "#1f3a26", "#3b5e36"][k % 4]
         bake(Piece(ellipse_poly(cx, cy, r, r * 0.9, wobble=0.06, rng=rng), colr, rng, kind="felt",
                    stitch=("#15261a", 6 * u, 5 * u, 1.3 * u), fabric_scale=u))
+
+    for (fx_, fy_, hh) in Lz["araucarias"]:
+        tr_, tiers = araucaria(X(fx_), Y(fy_), hh * u, rng, 0, u=u)
+        for y_ in tr_:
+            bake_yarn(y_)
+        for t_ in tiers:
+            bake(t_)
 
     # --- potreros de retazos ----------------------------------------------------------------------------
     fabrics = [("#6d9a4a", "gingham", "#4f7a35"), ("#8aa84f", "plain", None), ("#5d8a54", "dots", "#dfe6c6"),
@@ -222,7 +244,8 @@ def build(W, H, seed=11):
                                   roof=hd["roof"], wall_kind=hd["k"], windows=1, door_side=0.5 if i % 2 else -0.5, u=u)
         for p_ in parts:
             bake(p_)
-        info["houses"].append(dict(center=np.array(hd["c"]), door=np.array(door), top=hd["c"][1] - hd["h"]))
+        info["houses"].append(dict(center=np.array(hd["c"]), door=np.array(door), top=hd["c"][1] - hd["h"],
+                                   lit=[sp for w_ in wins for _, sp in w_]))
     # chimenea (para el humo)
     hA = houses[0]
     chx = hA["c"][0] + hA["w"] * 0.22
@@ -251,31 +274,52 @@ def build(W, H, seed=11):
         for c_ in crowns:
             bake(c_)
     # ovejas de bouclé
-    for (fx, fy) in Lz["sheep"]:
+    for i_s, (fx, fy) in enumerate(Lz["sheep"]):
         cx, cy = P(fx, fy)
+        k_s = rng.uniform(0.85, 1.18)                  # cada oveja de su tamaño
+        side = -1 if i_s % 2 == 0 else 1               # y mirando hacia su lado
         for leg in (-10, -4, 5, 11):
-            bake_yarn(Yarn([(cx + leg * u, cy), (cx + leg * u, cy + 16 * u)], 2.6 * u, "#2a2320", rng, fuzz=0.2))
-        for k in range(26):
+            bake_yarn(Yarn([(cx + leg * u * k_s, cy), (cx + leg * u * k_s + rng.normal(0, 1), cy + 15 * u * k_s)],
+                           2.6 * u, "#2a2320", rng, fuzz=0.2))
+        for k in range(int(26 * k_s)):
             a = rng.uniform(0, 2 * np.pi)
             rr = np.sqrt(rng.uniform(0, 1))
-            bake_sprite(knot((cx + np.cos(a) * rr * 17 * u, cy - 6 * u + np.sin(a) * rr * 10 * u),
-                             rng.uniform(3.2, 4.4) * u, "#f1ede4", rng), shadow=0.35)
-        bake_sprite(knot((cx - 20 * u, cy - 10 * u), 5.5 * u, "#2b2522", rng))
-    # vecinas y vecinos de lana (sin carita)
+            bake_sprite(knot((cx + np.cos(a) * rr * 17 * u * k_s, cy - 6 * u + np.sin(a) * rr * 10 * u * k_s),
+                             rng.uniform(3.2, 4.4) * u, rng.choice(["#f1ede4", "#ebe4d6", "#f4f0e8"]), rng), shadow=0.35)
+        hy_ = cy - (10 + rng.uniform(-4, 5)) * u        # una pastando, otra mirando
+        bake_sprite(knot((cx + side * 20 * u * k_s, hy_), 5.5 * u, "#2b2522", rng))
+    # vecinas y vecinos de lana (sin carita): se animan en la escena; aquí solo su silueta a contraluz
     pp_ = Lz["people"]
     looks = [("#7d3c6a", "dots", "#e8dcc8", "#c68e67", "#3a2a20"), ("#2f6f4f", "gingham", "#e9e1cf", "#9a6a4b", "#1d1612"),
              ("#c0582f", "print", "#f0d98a", "#d7a47e", "#5a3a22"), ("#3b4f8f", "stripes", "#e8e2d2", "#b98363", "#2a1d15")]
+    info["dolls"] = []
     for i, (dc, dk, d2, skin, hair) in enumerate(looks):
         fx, fy = pp_[2 * i], pp_[2 * i + 1]
-        d = doll(X(fx), Y(fy) - 6 * u, 150 * u, rng, 0, dress=dc, dress_kind=dk, dress2=d2, skin=skin, hair=hair,
-                 hand_y=Y(fy) - 6 * u - 150 * u * 0.30, u=u)
-        _bake_doll(d, canvas, T)
+        spec = dict(fx=X(fx), base=Y(fy) - 6 * u, hgt=150 * u * rng.uniform(0.88, 1.12), dress=dc, dress_kind=dk,
+                    dress2=d2, skin=skin, hair=hair, u=u)
+        spec["arms"] = ["down", "hip", "down", "hip"][i]
+        info["dolls"].append(spec)
+        lay = doll_layer(doll(spec["fx"], spec["base"], spec["hgt"], np.random.default_rng(700 + i), 0,
+                              dress=dc, dress_kind=dk, dress2=d2, skin=skin, hair=hair, arms=spec["arms"], u=u))
+        composite_T(T, lay)
 
     # --- borde de punto festón y orilla del saco --------------------------------------------------------------
     b = 26 * u
     border = [(b, b), (W - b, b), (W - b, H - b), (b, H - b), (b, b)]
     for _, sp in blanket_stitch(border, 14 * u, 16 * u, 3.6 * u, "#c98f2c", rng, inward=-1):
         bake_sprite(sp)
+    # --- el revés, a contraluz: la puntada corrida es un hilo continuo y hay nudos -----------------------
+    back = np.zeros((H * 2, W * 2), np.float32)
+    for poly_, sw_ in seams:
+        pts_ = np.vstack([poly_, poly_[:1]]) * 2
+        cv2.polylines(back, [np.round(pts_ * 8).astype(np.int32)], False, 1.0, max(1, int(sw_ * 1.6)), cv2.LINE_AA,
+                      shift=3)
+        for _ in range(int(rng.integers(1, 3))):          # nudos de comienzo y fin
+            q_ = poly_[int(rng.integers(0, len(poly_)))] * 2
+            cv2.circle(back, (int(q_[0]), int(q_[1])), max(2, int(sw_ * 2.6)), 1.0, -1, cv2.LINE_AA)
+    back = cv2.resize(back, (W, H), interpolation=cv2.INTER_AREA)
+    back = np.clip(cv2.GaussianBlur(back, (0, 0), 0.9 * u) * 1.3, 0, 1)
+    T *= (1 - 0.72 * back)[..., None]
     info["u"] = u
     info["W"], info["H"] = W, H
     info["stakes"] = [np.array(P(*p)) for p in Lz["stakes"]]

@@ -125,8 +125,9 @@ class Stitch:
     """Una puntada de p0 a p1 (el hilo entra y sale de la tela en los extremos)."""
 
     @staticmethod
-    def render(p0, p1, w, color, rng, kind="floss", hole=True):
+    def render(p0, p1, w, color, rng, kind="floss", hole=True, bow=None):
         color = lin(color) if isinstance(color, str) else np.asarray(color, np.float32)
+        color = color * rng.uniform(0.94, 1.06)          # cada hebra con su tono
         p0, p1 = np.asarray(p0, np.float64), np.asarray(p1, np.float64)
         d = p1 - p0
         L = float(np.hypot(*d))
@@ -135,7 +136,10 @@ class Stitch:
             d = np.array([0.5, 0.0])
         t = d / L
         n = np.array([-t[1], t[0]])
-        pad = w * 1.6 + 3
+        # una puntada larga no es una regla: se comba 1–2 px cada 100 px
+        if bow is None:
+            bow = (rng.uniform(0.008, 0.02) * L * rng.choice([-1, 1])) if L > 12 * w else 0.0
+        pad = w * 1.6 + 3 + abs(bow)
         x0 = int(np.floor(min(p0[0], p1[0]) - pad))
         y0 = int(np.floor(min(p0[1], p1[1]) - pad))
         x1 = int(np.ceil(max(p0[0], p1[0]) + pad + w * 0.6))
@@ -145,6 +149,8 @@ class Stitch:
         s_px = qx * t[0] + qy * t[1]
         e = qx * n[0] + qy * n[1]
         s = s_px / L
+        if bow:
+            e = e - bow * 4 * np.clip(s, 0, 1) * (1 - np.clip(s, 0, 1))
         end = np.minimum(s_px, L - s_px)
         r = (w / 2) * np.sqrt(np.clip(end / (w * 0.55) + 0.15, 0, 1))
         r = np.where((s_px < -0.2) | (s_px > L + 0.2), 0, r)
@@ -340,12 +346,12 @@ def running_stitch(path, stitch, gap, w, color, rng, jitter=0.6, kind="floss", c
     s = rng.uniform(0, gap)
     while s + stitch < arc[-1]:
         a = int(np.searchsorted(arc, s))
-        b = int(np.searchsorted(arc, s + stitch * rng.uniform(0.85, 1.15)))
+        b = int(np.searchsorted(arc, s + stitch * rng.uniform(0.72, 1.28)))
         b = min(b, len(pts) - 1)
-        p0 = pts[a] + rng.normal(0, jitter, 2)
-        p1 = pts[b] + rng.normal(0, jitter, 2)
-        out.append((s, Stitch.render(p0, p1, w, color, rng, kind=kind)))
-        s += stitch + gap * rng.uniform(0.8, 1.2)
+        p0 = pts[a] + rng.normal(0, jitter * 1.6, 2)
+        p1 = pts[b] + rng.normal(0, jitter * 1.6, 2)
+        out.append((s, Stitch.render(p0, p1, w * rng.uniform(0.88, 1.12), color, rng, kind=kind)))
+        s += stitch + gap * rng.uniform(0.65, 1.4)
     return out
 
 
@@ -392,11 +398,11 @@ def blanket_stitch(path, spacing, leg, w, color, rng, inward=1):
         tng = pts[k] - pts[k - 1]
         tng /= np.linalg.norm(tng) + 1e-9
         nrm = np.array([-tng[1], tng[0]]) * inward
-        foot = p + nrm * leg * rng.uniform(0.92, 1.08)
-        p = p + rng.normal(0, 0.6, 2)
+        foot = p + nrm * leg * rng.uniform(0.8, 1.2) + tng * rng.normal(0, leg * 0.08)
+        p = p + rng.normal(0, 0.9, 2)
         out.append((s, Stitch.render(p, foot + rng.normal(0, 0.8, 2), w, color, rng, kind="wool")))
         if prev is not None:
             out.append((s, Stitch.render(prev, p, w * rng.uniform(0.9, 1.1), color, rng, kind="wool", hole=False)))
         prev = p
-        s += spacing * rng.uniform(0.85, 1.15)
+        s += spacing * rng.uniform(0.75, 1.28)
     return out
