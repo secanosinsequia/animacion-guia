@@ -1,0 +1,90 @@
+# «Cuando una ve» — intro animada para la Guía SATC (v3)
+
+**Pieza:** animación de presentación de 5 segundos (hero de la web, apta para *scroll-scrubbing*).
+**Fuente:** *Propuesta de Guía SATC — Un sistema de alerta temprana comunitario ante la amenaza de
+megaproyectos de energía eléctrica en Chile* (Red Comunitaria de Alerta Energética, 2026).
+
+> v2 tras el rechazo del verificador n.º 1 (sorpresa 5/10): se agrega la amenaza (torre de medición),
+> la bandada ya no huye sino que **se posa en el territorio**, un solo sistema pop (riso en tres pasadas),
+> paleta y tipografía reducidas, y el final pasa la guardia a otra vigía.
+> v3 tras la segunda revisión (7/10): **el clic** (ALERTA llega al final y todo el título encaja en el
+> mismo cuadro), **la posta** del rojo, **solo la torre se dibuja** (la lámina está completa en el cuadro 0),
+> el murmullo son **las motas del propio kraft**, huellas que riman y cierre de ≥ 0,6 s.
+
+---
+
+## 1. La metáfora
+
+La guía ya tiene su propia poesía y la pieza la toma al pie de la letra:
+
+* **La vigía** es un **queltehue** (*Vanellus chilensis*), el centinela del campo chileno: grita
+  cuando alguien se acerca y despierta a todo el potrero. Su **ojo rojo es el único rojo de la lámina**.
+* **La amenaza** es finísima: una **torre de medición de viento** que aparece en el cerro.
+  «Si aparece una en los cerros, hay un proyecto explorando instalarse» (3.2).
+* **La torre es la única línea nueva**: la lámina está terminada desde el cuadro 0 (sirve de póster) y
+  la torre se traza recta y fría, con regla y tiralíneas, de grosor constante: **no es propia del lugar**.
+* **El murmullo** (3.1.3): «señales débiles que cobran sentido al juntarse». **Las motas del propio
+  kraft se levantan del papel** (las señales estuvieron ahí desde el principio) y forman las palabras en
+  tinta, que quedan flotando como **indicio**: descuadradas, temblando (rumor → indicio).
+* **Cuando una ve…** el rojo sale del ojo del queltehue y se vuelve **ALERTA**; al llegar, **todo el
+  título encaja en registro en el mismo cuadro** y el papel se abolla: el **dato** confirmado.
+* **…todas vuelan.** Cada letra se vuelve **un queltehue** (la M y la V ya son alas). La bandada no
+  huye: **baja al potrero y se posa** (ave de suelo): la alerta repartida en el territorio.
+* **La posta.** Al volverse pájaros, ALERTA suelta su rojo, que se junta en **un solo punto**: el ojo de
+  la vigía de turno. Todas duermen de pie **menos una**; el queltehue por fin cierra el suyo.
+  «No se trata de vivir en alerta permanente» (síndrome del vigía, 1.3).
+
+Y como es una *guía de campo*, la lámina describe al SATC **como una especie viva**:
+
+> **Lám. I — La bandada vigía** · *Vigilans communitas*
+
+## 2. Lenguaje visual
+
+**Paleta: kraft, tinta, blanco y un rojo.**
+kraft claro · tinta negra cálida `#221a14` y sus aguadas (sepia y gris frío) · gouache blanco `#f4ead0` ·
+**rojo** *Red Orange* `#dd4027` (Sanzo Wada, combinación 241), solo para el ojo → ALERTA → el ojo de guardia.
+
+**Tipografía: dos familias.**
+*Anton* (afiche condensado, espíritu Brigada Ramona Parra) para el título ·
+*IM Fell English* (tipos del s. XVII, lenguaje de lámina naturalista) para rótulos.
+
+**Pop:** un único sistema — **riso en tres pasadas**. Cada palabra entra como fantasma descuadrado
+(rumor: motas; indicio: pasadas blanca y de color corridas y translúcidas; dato: encaje de golpe con
+2 cuadros de anticipación y 3 de sobreimpulso). El rojo lleva **base blanca** debajo para no
+embarrarse sobre el kraft. ALERTA, al encajar, **abolla el papel** localmente (no sacude la cámara).
+Referentes: Brigada Ramona Parra, Corita Kent, grabado y letterpress de afiche comunitario.
+
+**Anti-digital:** granulación y bordes de acuarela que siguen el relieve del kraft; tinta de presión
+variable con charcos en los extremos; capas dibujadas animadas «en dos» (15 fps sobre 30 fps);
+*smears* (copias arrastradas) en lugar de desenfoque; pájaros con poses dibujadas; grano algo más
+grueso para que sobreviva al H.264.
+
+**Detalles de guía de campo** (tinta fina, IM Fell):
+fig. 1 *Queltehue · Vanellus chilensis · la vigía* · fig. 2 *Torre de medición de viento
+(mástil anemométrico)* · recuadro **No confundir con:** antena de telefonía (platos y paneles) ·
+recuadro **Huellas:** queltehue (tres dedos) / planta de la torre vista desde arriba (base y tres
+tensores), con barras de escala ·
+recuadro **Distribución:** de Arica a Chiloé (mini-mapa).
+
+## 3. Guion en tres actos (5,0 s · 30 fps · 150 cuadros)
+
+| Tiempo | Acto | Qué pasa |
+|---|---|---|
+| 0,00–1,20 | **I. La vigía y la torre** | Lámina completa (póster): el queltehue hurga el pasto. En el cerro, **la torre se traza sola con regla**: mástil, celosía, tensores rectos, brazos con anemómetros que empiezan a girar. El queltehue levanta la cabeza (anticipación, sobreimpulso, cresta erizada) y **abre el ojo: el primer rojo**. |
+| 1,20–3,30 | **II. El murmullo y el clic** | Las motas del kraft se levantan y convergen: **SISTEMA DE / TEMPRANA / COMUNITARIO** quedan flotando como *indicio* (pasadas descuadradas que tiemblan). **ALERTA sale del ojo** en un arco rojo y, al llegar, **todo el título encaja en el mismo cuadro** (3 cuadros de sobreimpulso) y el papel se abolla. **El título queda quieto ≥ 1 s.** |
+| 3,30–5,00 | **III. La suelta y la posta** | Onda de alarma desde la vigía: cada letra se aprieta y **se vuelve un queltehue** en vuelo (≈ 0,6 s). Bajan al potrero y se posan; el rojo de ALERTA se junta en **un punto: el ojo de la vigía de turno**. Todas esconden la cabeza; una queda despierta. El queltehue cierra el suyo. Nota: *«Comportamiento: cuando una ve, todas vuelan; duermen por turnos.»* **Cuadro final ≥ 0,6 s.** |
+
+## 4. En la web
+
+* Al cargar, la animación **corre sola hasta el título** (actos I–II).
+* **El scroll maneja solo el acto III** y su reversa: al bajar, la alerta se reparte por el territorio;
+  al subir, **la bandada regresa y vuelve a formar el título**.
+* `<h1>` real en HTML (accesible e indexable). Versiones **16:9** (escritorio) y **4:5** (móvil).
+
+## 5. Entregables
+
+* `output/satc_cuando_una_ve_1920x1080.mp4` — H.264, 5 s.
+* `output/satc_cuando_una_ve_1080x1350.mp4` — versión móvil 4:5.
+* `output/*_scroll.mp4` — todos los cuadros clave (scrub con `currentTime`).
+* `web/` — demo del hero con scroll (secuencia de cuadros en `<canvas>`).
+* `satc_intro/` — el código Python que genera todo.
