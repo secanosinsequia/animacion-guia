@@ -48,7 +48,7 @@ def layout(W, H):
             map_x=1824 * u, map_top=136 * v, map_bottom=430 * v,
             title_cx=1075 * u, title_w=560 * u, title_top=150 * v, title_gap=14 * v, title_small_cap=40 * v,
             land_box=(700 * u, 800 * v, 1700 * u, 938 * v), land_h=(26 * v, 42 * v),
-            duty_pt=s(1010, 936), duty_h=98 * v,
+            duty_pt=s(1010, 950), duty_h=132 * v,
             note_cx=1075 * u, note_y=(300 * v, 352 * v), note_cap=26 * u,
         )
     u = W / 1080.0
@@ -65,7 +65,7 @@ def layout(W, H):
         map_x=1000 * u, map_top=120 * v, map_bottom=380 * v,
         title_cx=470 * u, title_w=640 * u, title_top=122 * v, title_gap=14 * v, title_small_cap=44 * v,
         land_box=(420 * u, 1020 * v, 1000 * u, 1215 * v), land_h=(26 * v, 42 * v),
-        duty_pt=s(612, 1212), duty_h=92 * v,
+        duty_pt=s(640, 1228), duty_h=124 * v,
         note_cx=500 * u, note_y=(330 * v, 380 * v), note_cap=26 * u,
     )
 
@@ -260,15 +260,7 @@ class Scene:
             self._glaze(img, a_i * self.g_ink, self.col["ink"], 1.35)
 
         # III. La bandada (cada ave compuesta por separado, de atrás hacia adelante) y la posta del rojo
-        self.flock.render(img, t, self.bird_colors, self.g_white)
-        self.flock.draw_relay(M["relay"], t)
-        a_rel = M["relay"].array()
-        if a_rel.any():
-            a_rel = self._rough(a_rel)
-            rim = np.clip(a_rel - cv2.GaussianBlur(a_rel, (0, 0), 1.8 * L["u"]), 0, 1)
-            gran = 0.8 + 0.25 * (1 - self.ph)
-            self._over(img, np.clip(a_rel * gran, 0, 1), self.col["red"], 0.95)
-            self._glaze(img, rim * 1.6, self.col["red_dark"], 0.9)
+        self.flock.render(img, t, self.bird_colors, self.g_red)
 
         # Nota de comportamiento (voz de guía de campo)
         self._note(img, t)

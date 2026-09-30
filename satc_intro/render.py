@@ -79,7 +79,7 @@ def encode(frames_dir, out, crf=16, all_intra=False, preset="slow", width=None):
     print("MP4:", out, f"{os.path.getsize(out) / 1e6:.1f} MB")
 
 
-def export_web_frames(frames_dir, web_dir, width, quality=82):
+def export_web_frames(frames_dir, web_dir, width, quality=74):
     """Secuencia WebP para scroll-scrubbing en <canvas>."""
     os.makedirs(web_dir, exist_ok=True)
     names = sorted(f for f in os.listdir(frames_dir) if f.endswith(".png"))
@@ -116,7 +116,7 @@ def main(argv=None):
     if a.out:
         encode(frames_dir, a.out, crf=a.crf)
     if a.scroll_out:
-        encode(frames_dir, a.scroll_out, crf=a.crf + 4, all_intra=True, preset="medium", width=a.scroll_width)
+        encode(frames_dir, a.scroll_out, crf=a.crf + 8, all_intra=True, preset="medium", width=a.scroll_width)
     if a.web_dir:
         export_web_frames(frames_dir, a.web_dir, a.web_width)
 

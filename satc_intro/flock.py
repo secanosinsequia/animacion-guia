@@ -11,9 +11,12 @@ con borde de fuga negro, franja blanca y mano negra. Seis cuadros antes de posar
 mostrando el blanco y patas adelante; al tocar el suelo, squash (Y 0,9) y las alas se pliegan.
 En el suelo: dormidas en tres poses (en una pata, en dos, echadas), a escala según la profundidad y en
 grupos que se solapan; cada ave se compone por separado, de atrás hacia adelante.
-La posta: al volverse pájaros, las letras rojas gotean; las gotas se juntan en un solo reguero de
-acuarela que baja por el papel hasta el ojo de la vigía de turno, que destella.
+La posta (sin líquido: el rojo es una plancha riso): la «A» de ALERTA se vuelve la vigía de turno y
+vuela con su plancha roja encima, en multiply y descuadrada 3 px; las demás letras rojas sueltan su
+plancha al sustituirse (se corre 6–8 px y se apaga en 3 cuadros, como papel que sale de la prensa). Al
+posarse, la plancha de la A se contrae hacia el ojo en 6 cuadros y deja solo el ojo rojo, que destella.
 """
+import cv2
 import numpy as np
 
 from . import queltehue as Q
@@ -21,9 +24,10 @@ from .geometry import catmull_rom
 from .ink import Mask
 
 FPS = 30.0
-K_SUB = 7          # cuadros desde el «pop» hasta la sustitución por el pájaro dibujado
+K_SUB = 5          # cuadros desde el «pop» hasta la sustitución por el pájaro dibujado
 LAND_FRAMES = 6    # cuadros de pose de aterrizaje antes de tocar el suelo
-FOLD_FRAMES = 5    # squash (2) + alas que se pliegan (3)
+FOLD_FRAMES = 4    # squash (2) + alas que se pliegan (2)
+SHRINK_FRAMES = 6  # la plancha roja de la vigía de turno se contrae hacia el ojo
 
 # poses de aleteo: (ángulo del brazo sobre la horizontal, quiebre de la mano, largo relativo)
 POSES = [(48, -10, 1.0), (4, 0, 1.0), (-38, 14, 0.95), (16, 34, 0.82)]
@@ -43,17 +47,35 @@ class Stamp:
     """Capas de una sola ave, del tamaño de su caja; se dibuja en coordenadas de pantalla."""
     LAYERS = ("back", "head", "white", "ink", "red")
 
-    def __init__(self, box, W, H):
+    def __init__(self, box, W, H, single=False, shift=(0.0, 0.0)):
         x0, y0, x1, y1 = box
         self.x0, self.y0 = int(max(0, np.floor(x0))), int(max(0, np.floor(y0)))
         self.x1, self.y1 = int(min(W, np.ceil(x1))), int(min(H, np.ceil(y1)))
         self.ok = self.x1 - self.x0 > 1 and self.y1 - self.y0 > 1
         self.m = {}
         if self.ok:
-            for k in self.LAYERS:
+            if single:   # una sola plancha (silueta completa), p. ej. la plancha roja descuadrada
                 m = Mask(self.x1 - self.x0, self.y1 - self.y0)
-                m.ctx.translate(-self.x0, -self.y0)
-                self.m[k] = m
+                m.ctx.translate(-self.x0 + shift[0], -self.y0 + shift[1])
+                for k in self.LAYERS:
+                    self.m[k] = m
+            else:
+                for k in self.LAYERS:
+                    m = Mask(self.x1 - self.x0, self.y1 - self.y0)
+                    m.ctx.translate(-self.x0, -self.y0)
+                    self.m[k] = m
+
+    def composite_glaze(self, img, color, k, grain, alpha=1.0):
+        """La plancha como tinta transparente (multiply), con grano de papel."""
+        if not self.ok:
+            return
+        a = self.m["back"].array()
+        if not a.any():
+            return
+        reg = img[self.y0:self.y1, self.x0:self.x1]
+        g = grain[self.y0:self.y1, self.x0:self.x1]
+        a = np.clip(a * alpha * (0.78 + 0.22 * g), 0, 1)
+        reg *= np.exp(a[..., None] * k * np.log(np.clip(color, 0.01, 1))[None, None, :])
 
     def composite(self, img, colors, grain):
         if not self.ok:
@@ -65,10 +87,13 @@ class Stamp:
             if not a.any():
                 continue
             if k in ("back", "head", "white"):
-                a = a * (0.84 + 0.16 * g)          # pigmento con grano de papel
+                a = a * (0.80 + 0.20 * g)          # pigmento con grano de papel
             aa = np.clip(a, 0, 1)[..., None]
             reg *= (1 - aa)
             reg += colors[k][None, None, :] * aa
+            if k in ("back", "head"):              # borde oscurecido, como una aguada que se seca
+                rim = np.clip(a - cv2.GaussianBlur(a, (0, 0), 1.2), 0, 1)
+                reg *= (1 - 0.14 * np.clip(rim * 2.5, 0, 1))[..., None]
 
 
 class Bird:
@@ -90,7 +115,8 @@ class Bird:
         self.pose = pose
         self.duty = duty
         self.phase0 = int(rng.integers(0, 4))
-        self.sleep_t = self.t_land + FOLD_FRAMES / FPS + rng.uniform(0.02, 0.07)
+        self.lw_k = rng.uniform(0.75, 1.3)       # grosor de contorno propio de cada ave (±0,5 px)
+        self.sleep_t = self.t_land + FOLD_FRAMES / FPS + rng.uniform(0.02, 0.05)
         # trayectoria del centro del cuerpo: se eleva y sale hacia afuera; llega planeando de costado
         self.p0 = self.meta_pos(self.t_sub)
         self.p3 = self.feet + np.array([0.0, -0.5 * h_land])
@@ -108,7 +134,7 @@ class Bird:
     def meta_pos(self, t):
         k = (t - self.t_pop) * FPS
         d = max(0.0, k - 2)
-        return self.pivot + self.away * d * 3.0 * self.u + np.array([0, -d * 2.5 * self.u])
+        return self.pivot + self.away * d * 2.0 * self.u + np.array([0, -d * 5.0 * self.u])   # sube 12–18 px
 
     def flight(self, t):
         u = np.clip((t - self.t_sub) / max(1e-3, self.t_land - self.t_sub), 0, 1)
@@ -117,7 +143,7 @@ class Bird:
 
 
 class Flock:
-    def __init__(self, title, lay, rng, W, H, t_release=3.00, eye=None, spread=0.25, flight=(0.40, 0.46)):
+    def __init__(self, title, lay, rng, W, H, t_release=3.00, eye=None, spread=0.50, flight=(0.34, 0.40)):
         self.title = title
         self.lay = lay
         self.W, self.H = W, H
@@ -159,8 +185,9 @@ class Flock:
 
         # Onda de alarma circular desde el ojo de la vigía
         src = np.asarray(eye if eye is not None else (0, 0), np.float64)
-        dists = [np.hypot(*(L.center - src)) for L in letters]
-        dmin, dmax = min(dists), max(dists)
+        # onda desde el ojo: orden por distancia, con espaciado parejo (≤ 6 letras abriéndose a la vez)
+        order = sorted(range(n), key=lambda i: np.hypot(*(letters[i].center - src)) + rng.normal(0, 6 * u))
+        rank = {id(letters[i]): r for r, i in enumerate(order)}
         duty_letter = title.alerta.letters[0]
         others = [L for L in letters if L is not duty_letter]
         by_x = sorted(others, key=lambda L: L.center[0] + rng.normal(0, 40 * u))
@@ -168,7 +195,7 @@ class Flock:
         poses = ["one_leg", "two_legs", "sitting"]
         for L, sp in [(duty_letter, duty_pt)] + list(zip(by_x, spots)):
             d = np.hypot(*(L.center - src))
-            t_pop = t_release + spread * (d - dmin) / max(1.0, dmax - dmin)
+            t_pop = t_release + spread * rank[id(L)] / max(1, n - 1)
             away = (L.center - src) / max(1.0, d)
             is_duty = L is duty_letter
             h = duty_h if is_duty else hfun(sp[1]) * rng.uniform(0.9, 1.1)
@@ -180,68 +207,74 @@ class Flock:
             self.birds.append(b)
         self.duty = self.birds[0]
 
-        # La posta: gotas de cada letra roja -> punto de encuentro -> reguero vertical -> ojo
-        A = title.alerta
-        eye_pt, _ = self.duty_eye()
-        self.merge = np.array([eye_pt[0], A.box[3] + 150 * u])
+        # La posta: la plancha roja viaja con la vigía de turno y se contrae hasta su ojo
         self.red_birds = [b for b in self.birds if b.color == "red"]
-        self.t_merge = max(b.t_sub for b in self.red_birds) + 0.20
-        self.t_eye = max(self.t_merge + 0.42, self.duty.t_land + FOLD_FRAMES / FPS + 0.03)
-        self.drop_seed = int(rng.integers(1 << 30))
+        self.t_eye = self.duty.t_land + SHRINK_FRAMES / FPS
 
     # --- la vigía de turno ------------------------------------------------------------------------------
     def duty_eye(self):
         b = self.duty
         s = b.h_land / 0.82
         e = np.array(Q.EYE) * np.array([b.facing, 1.0]) * s + b.feet
-        return e, max(Q.EYE_R * s * 1.25, 5.2 * self.u)
+        return e, 3.8 * self.u          # 7–8 px de diámetro
 
     # --- metamorfosis: mitades de la letra en las planchas riso ------------------------------------------
+    def _halves(self, m, b, pos, theta, sc, flip, alpha=1.0):
+        L = b.letter
+        x0, y0, x1, y1 = L.box
+        pad = 8 * self.u
+        piv = b.pivot
+        ctx = m.ctx
+        for side in (-1, 1):
+            ctx.save()
+            ctx.translate(pos[0], pos[1])
+            ctx.scale(sc, -sc if flip else sc)
+            ctx.rotate(side * theta)
+            ctx.translate(-piv[0], -piv[1])
+            if side < 0:
+                ctx.rectangle(x0 - pad, y0 - pad, piv[0] - (x0 - pad), (y1 - y0) + 2 * pad)
+            else:
+                ctx.rectangle(piv[0], y0 - pad, (x1 + pad) - piv[0], (y1 - y0) + 2 * pad)
+            ctx.clip()
+            L.draw(ctx)
+            m.set_alpha(alpha)
+            ctx.fill()
+            ctx.restore()
+
+    def _meta_body(self, m, b, pos, alpha=1.0):
+        # cuerpo y cabeza (35–40 % de la altura de la letra) en el vértice
+        r = b.lh
+        f = b.facing
+        a = np.linspace(0, 2 * np.pi, 22, endpoint=False)
+        m.fill_poly(np.stack([pos[0] + f * 0.16 * r * np.cos(a), pos[1] + 0.085 * r * np.sin(a)], 1), alpha)
+        hc = pos + np.array([f * 0.15 * r, -0.10 * r])
+        m.dot(hc[0], hc[1], 0.075 * r, alpha)
+        m.fill_poly([(hc[0] + f * 0.06 * r, hc[1] - 0.02 * r), (hc[0] + f * 0.16 * r, hc[1]),
+                     (hc[0] + f * 0.06 * r, hc[1] + 0.02 * r)], alpha)
+        m.fill_poly([(pos[0] - f * 0.14 * r, pos[1] - 0.02 * r), (pos[0] - f * 0.26 * r, pos[1] + 0.01 * r),
+                     (pos[0] - f * 0.14 * r, pos[1] + 0.04 * r)], alpha)
+
     def draw_letters(self, plates, t):
         for b in self.birds:
             k = b.k(t)
-            if k < 2 or k >= K_SUB or t < b.t_pop:
+            if t < b.t_pop or k < 2:
                 continue
-            L = b.letter
-            pos = b.meta_pos(t)
-            flip = k >= 5
-            theta = np.deg2rad({2: 14, 3: 28, 4: 40}.get(k, 40))
-            sc = 0.97 if not flip else 0.93
-            names = ("white", "red") if b.color == "red" else ("ink",)
-            x0, y0, x1, y1 = L.box
-            pad = 8 * self.u
-            piv = b.pivot
-            for name in names:
-                m = plates[name]
-                ctx = m.ctx
-                for side in (-1, 1):
-                    ctx.save()
-                    ctx.translate(pos[0], pos[1])
-                    ctx.scale(sc, -sc if flip else sc)
-                    ctx.rotate(side * theta)
-                    ctx.translate(-piv[0], -piv[1])
-                    if side < 0:
-                        ctx.rectangle(x0 - pad, y0 - pad, piv[0] - (x0 - pad), (y1 - y0) + 2 * pad)
-                    else:
-                        ctx.rectangle(piv[0], y0 - pad, (x1 + pad) - piv[0], (y1 - y0) + 2 * pad)
-                    ctx.clip()
-                    L.draw(ctx)
-                    m.set_alpha(1.0)
-                    ctx.fill()
-                    ctx.restore()
-                # cuerpo y cabeza (35–40 % de la altura de la letra) en el vértice
-                r = b.lh
-                f = b.facing
-                a = np.linspace(0, 2 * np.pi, 22, endpoint=False)
-                body = np.stack([pos[0] + f * 0.16 * r * np.cos(a), pos[1] + 0.085 * r * np.sin(a)], 1)
-                m.fill_poly(body, 1.0)
-                hc = pos + np.array([f * 0.15 * r, -0.10 * r])
-                m.dot(hc[0], hc[1], 0.075 * r, 1.0)
-                m.fill_poly([(hc[0] + f * 0.06 * r, hc[1] - 0.02 * r), (hc[0] + f * 0.16 * r, hc[1]),
-                             (hc[0] + f * 0.06 * r, hc[1] + 0.02 * r)], 1.0)
-                tail = [(pos[0] - f * 0.14 * r, pos[1] - 0.02 * r), (pos[0] - f * 0.26 * r, pos[1] + 0.01 * r),
-                        (pos[0] - f * 0.14 * r, pos[1] + 0.04 * r)]
-                m.fill_poly(tail, 1.0)
+            if k < K_SUB:
+                pos = b.meta_pos(t)
+                flip = k >= 4                                   # k 2–3: se abre en V · k 4: aletazo en Λ
+                theta = np.deg2rad(20 if k == 2 else 40)
+                sc = 0.75
+                names = ("white", "red") if b.color == "red" else ("ink",)
+                for name in names:
+                    self._halves(plates[name], b, pos, theta, sc, flip, alpha=0.85 if flip else 1.0)
+                    self._meta_body(plates[name], b, pos)
+            elif b.color == "red" and not b.duty and k < K_SUB + 3:
+                # suelta su plancha: se corre 6–8 px y se apaga, como papel que sale de la prensa
+                j = k - K_SUB
+                pos = b.meta_pos(b.t_sub - 1e-3) + np.array([2.6, 1.6]) * (j + 1) * self.u
+                a = (0.7, 0.42, 0.18)[j]
+                self._halves(plates["red"], b, pos, np.deg2rad(40), 0.75, True, alpha=a)
+                self._meta_body(plates["red"], b, pos, alpha=a)
 
     # --- dibujo del ave en vuelo (vista frontal-baja: silueta en M) -------------------------------------
     def _wing(self, st, side, theta_deg, flex_deg, length, sp, center, bank):
@@ -263,8 +296,9 @@ class Flock:
                 p = w + np.array([np.cos(th + fl), np.sin(th + fl)]) * d
             pts.append(p)
         pts = np.array(pts)
-        chord = c0 * np.where(s < 0.82, 0.62 + 0.38 * np.sin(np.clip(s / 0.7, 0, 1) * np.pi / 2),
-                              np.sqrt(np.clip(1 - ((s - 0.82) / 0.18) ** 2, 0, 1)))
+        body = 0.62 + 0.38 * np.sin(np.clip(s / 0.62, 0, 1) * np.pi / 2)
+        tip = np.sqrt(np.clip(1 - ((s - 0.66) / 0.34) ** 2, 0, 1))          # punta redonda
+        chord = c0 * np.where(s < 0.66, body, tip)
         tang = np.gradient(pts, axis=0)
         tang /= np.linalg.norm(tang, axis=1, keepdims=True) + 1e-9
         nor = np.stack([-tang[:, 1], tang[:, 0]], 1)       # hacia el borde de ataque (arriba)
@@ -357,10 +391,14 @@ class Flock:
                 c.stroke()
 
     # --- ave en el suelo (vista lateral) --------------------------------------------------------------------
-    def _stand(self, st, b, t, squash=1.0, wings_fold=None):
-        s = b.h_land / 0.82
+    def _stand(self, st, b, t, squash=1.0, wings_fold=None, about=None, silhouette=False):
         f = b.facing
+        s = b.h_land / 0.82
         base = b.feet
+        if about is not None:          # escala anclada en un punto (la plancha que se contrae al ojo)
+            E, kk = about
+            base = E + (base - E) * kk
+            s = s * kk
 
         def X(pts):
             q = np.asarray(pts, np.float64).reshape(-1, 2) * np.array([f * s, s * squash])
@@ -403,7 +441,7 @@ class Flock:
             c.line_to(*cr[2])
             c.stroke()
             pb = X(body)
-            c.set_line_width(max(0.6, 0.008 * s))
+            c.set_line_width(max(0.6, 0.008 * s) * b.lw_k)
             c.move_to(*pb[0])
             for q in pb[1:]:
                 c.line_to(*q)
@@ -413,7 +451,7 @@ class Flock:
             ink.set_alpha(1.0)
             return
         body = catmull_rom(np.array(Q.BODY), 6, closed=True)
-        for leg in (Q.LEG_FAR, Q.LEG_NEAR):
+        for leg in (() if silhouette else (Q.LEG_FAR, Q.LEG_NEAR)):
             p = X(leg)
             c.set_line_width(lw)
             c.move_to(*p[0])
@@ -435,7 +473,7 @@ class Flock:
             c.line_to(*q)
         c.stroke()
         pb = X(body)
-        c.set_line_width(max(0.6, 0.008 * s) * (1.8 if b.duty else 1.0))
+        c.set_line_width(max(0.6, 0.008 * s) * (1.8 if b.duty else b.lw_k))
         c.move_to(*pb[0])
         for q in pb[1:]:
             c.line_to(*q)
@@ -446,24 +484,24 @@ class Flock:
         if wings_fold is not None:
             # alas aún abiertas en V que se pliegan sobre el lomo
             th, ln = wings_fold
-            sp = 1.5 * b.h_land
+            sp = 1.5 * b.h_land * (about[1] if about is not None else 1.0)
             sh = X([(-0.02, -0.62)])[0]
             for side in (-f, f):
                 self._wing(st, side, th + (6 if side == -f else 0), -6, ln, sp, sh, 0.0)
+        if silhouette:
+            return
         e = X([Q.EYE])[0]
         if b.duty:
             _, r = self.duty_eye()
             if t >= self.t_eye:
                 k = int(np.floor((t - self.t_eye) * FPS + 1e-6))
-                fl = 1.4 if k < 3 else 1.0                     # destello al empaparse
-                white.dot(e[0], e[1], r * 1.5 * fl, 1.0)       # halo de gouache
-                ink.dot(e[0], e[1], r * 1.12 * fl, 1.0)
+                fl = 1.4 if k < 3 else (1.2 if k == 3 else 1.0)   # destello de 3 cuadros y uno de sostén
+                ink.dot(e[0], e[1], r * fl + 1.0 * self.u, 1.0)   # contorno oscuro de 1 px
                 st.m["red"].dot(e[0], e[1], r * fl, 1.0)
-                ink.dot(e[0] + r * 0.08, e[1] + r * 0.05, r * 0.38 * fl, 1.0)
-                if k >= 3:
-                    st.m["white"].dot(e[0] - r * 0.35, e[1] - r * 0.38, r * 0.26, 1.0)
+                ink.dot(e[0] + 0.5 * self.u, e[1] + 0.3 * self.u, r * 0.34 * fl, 1.0)
+                st.m["white"].dot(e[0] - r * 0.4, e[1] - r * 0.42, 0.9 * self.u, 1.0)   # brillo de 1 px
             else:
-                ink.dot(e[0], e[1], r * 0.8, 1.0)
+                ink.dot(e[0], e[1], max(1.2, 0.012 * s), 1.0)
         else:
             ink.dot(e[0], e[1], max(0.9, 0.012 * s), 1.0)
 
@@ -481,21 +519,27 @@ class Flock:
             else:
                 todo.append((b.feet[1], b, "stand"))
         todo.sort(key=lambda x: x[0])
+        mis = np.array([3.0, 2.0]) * self.u               # plancha roja descuadrada ~3 px
         for _, b, kind in todo:
             if kind == "fly":
                 p, u = b.flight(t)
                 e = min(1.0, u / 0.7) ** 0.6
                 sp = b.span0 * (1 - e) + b.span1 * e
                 box = (p[0] - sp, p[1] - sp, p[0] + sp, p[1] + sp)
-                st = Stamp(box, W, H)
-                if not st.ok:
-                    continue
                 n_left = (b.t_land - t) * FPS
-                if n_left <= LAND_FRAMES:          # pose de aterrizaje: erguida, alas arriba, patas adelante
-                    self._fly_bird(st, b, t, pose=POSE_LAND, legs=True, upright=1.0)
-                else:
-                    self._fly_bird(st, b, t)
-                st.composite(img, colors, grain)
+                land = n_left <= LAND_FRAMES
+                for red in ((False, True) if b.duty else (False,)):
+                    st = Stamp(box, W, H, single=red, shift=mis if red else (0, 0))
+                    if not st.ok:
+                        continue
+                    if land:                          # erguida, alas arriba, patas adelante
+                        self._fly_bird(st, b, t, pose=POSE_LAND, legs=not red, upright=1.0)
+                    else:
+                        self._fly_bird(st, b, t)
+                    if red:
+                        st.composite_glaze(img, colors["red"], 0.95, grain)
+                    else:
+                        st.composite(img, colors, grain)
             else:
                 k = int(np.floor((t - b.t_land) * FPS + 1e-6))
                 s = b.h_land / 0.82
@@ -504,68 +548,23 @@ class Flock:
                 if not st.ok:
                     continue
                 if k < 2:
-                    self._stand(st, b, t, squash=0.9, wings_fold=(70, 1.0))
+                    kw = dict(squash=0.9, wings_fold=(70, 1.0))
                 elif k < FOLD_FRAMES:
                     j = k - 2
-                    self._stand(st, b, t, wings_fold=(70 - 22 * (j + 1), 0.8 - 0.25 * j))
+                    kw = dict(wings_fold=(70 - 30 * (j + 1), 0.75 - 0.3 * j))
                 else:
-                    self._stand(st, b, t)
+                    kw = {}
+                self._stand(st, b, t, **kw)
                 st.composite(img, colors, grain)
-
-    # --- la posta del rojo ------------------------------------------------------------------------------
-    @staticmethod
-    def _ribbon(m, pts, widths):
-        pts = np.asarray(pts, np.float64)
-        if len(pts) < 2:
-            return
-        tang = np.gradient(pts, axis=0)
-        tang /= np.linalg.norm(tang, axis=1, keepdims=True) + 1e-9
-        nor = np.stack([-tang[:, 1], tang[:, 0]], 1)
-        w = np.asarray(widths)[:, None] / 2
-        m.fill_poly(np.vstack([pts + nor * w, (pts - nor * w)[::-1]]), 1.0)
-        m.dot(pts[0, 0], pts[0, 1], widths[0] / 2, 1.0)
-        m.dot(pts[-1, 0], pts[-1, 1], widths[-1] / 2, 1.0)
+                if b.duty and k < SHRINK_FRAMES:
+                    # la plancha roja se contrae hacia el ojo (escala 1 → 0,08, anclada en el ojo)
+                    E, _ = self.duty_eye()
+                    kk = 1.0 - 0.92 * ((k + 1) / SHRINK_FRAMES) ** 1.3
+                    rs = Stamp(box, W, H, single=True, shift=mis * kk)
+                    if rs.ok:
+                        self._stand(rs, b, t, about=(E, kk), silhouette=True, **kw)
+                        rs.composite_glaze(img, colors["red"], 0.95, grain)
 
     def draw_relay(self, m, t):
-        u = self.u
-        rng = np.random.default_rng(self.drop_seed)
-        # 1) gotas: al volverse pájaro, cada letra roja suelta su pigmento
-        for b in self.red_birds:
-            offs = rng.normal(0, 0.18, (3, 2)) * np.array([b.lw, b.lh])
-            if b.duty:
-                continue
-            t0 = b.t_sub
-            if not (t0 <= t < self.t_merge + 2 / FPS):
-                continue
-            e = np.clip((t - t0) / max(1e-3, self.t_merge - t0), 0, 1)
-            e2 = e * e
-            for j in range(3):
-                a = b.meta_pos(t0) + offs[j]
-                z = self.merge
-                mid = np.array([a[0] + (z[0] - a[0]) * 0.15, a[1] + (z[1] - a[1]) * 0.85])   # cae y luego escurre
-                p = (1 - e2) ** 2 * a + 2 * e2 * (1 - e2) * mid + e2 * e2 * z
-                r = (4.2 - 0.8 * j) * u * (1 - 0.3 * e)
-                m.dot(p[0], p[1], r, 1.0)
-                e3 = max(e2 - 0.06, 0)
-                q = (1 - e3) ** 2 * a + 2 * e3 * (1 - e3) * mid + e3 * e3 * z
-                self._ribbon(m, [q, p], [r * 0.9, r * 1.6])
-        # 2) el reguero: una sola corrida de acuarela, de 10–14 px, que baja hasta el ojo
-        if t < self.t_merge or t > self.t_eye + 1 / FPS:
-            if self.t_merge - 3 / FPS <= t < self.t_merge:      # la gota se va juntando
-                g = (t - (self.t_merge - 3 / FPS)) / (3 / FPS)
-                m.dot(self.merge[0], self.merge[1], (4 + 3 * g) * u, 1.0)
-            return
-        eye, _ = self.duty_eye()
-        z = self.merge
-        e = np.clip((t - self.t_merge) / (self.t_eye - self.t_merge), 0, 1)
-        e = e ** 1.5                                            # acelera con la gravedad
-        y_head = z[1] + (eye[1] - z[1]) * e
-        tail_len = 170 * u * (1 - 0.6 * e)
-        y_tail = max(z[1], y_head - tail_len)
-        n = 24
-        ys = np.linspace(y_tail, y_head, n)
-        wob = 2.2 * u * np.sin(ys / (23 * u) + 1.7) + 1.2 * u * np.sin(ys / (7 * u))
-        xs = z[0] + (eye[0] - z[0]) * (ys - z[1]) / max(1.0, eye[1] - z[1]) + wob
-        widths = np.linspace(3.0, 12.5, n) * u
-        self._ribbon(m, np.stack([xs, ys], 1), widths)
-        m.dot(xs[-1], ys[-1] + 2 * u, 7.5 * u, 1.0)          # la gota en la punta
+        """Sin líquido: la posta ya no gotea (ver render)."""
+        return

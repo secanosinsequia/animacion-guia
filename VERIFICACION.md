@@ -19,7 +19,8 @@ acercamientos) y devolvieron veredicto, puntaje y correcciones concretas.
 |---|---|---|---|
 | 1 | Rechazado | 5/10 | Valoró la torre con regla, el clic y el ojo que se cierra. Pidió: metamorfosis real letra→ala (no un borrado), posta legible con vigía de turno en primer plano, murmullo como puntillado, riso sin ecos ni sombras, ALERTA desde la pupila con grito, golpe de prensa visible, queltehue sin «cuello de tubo», árboles en filas y nuevos tiempos. |
 | 2 | Rechazado | 7/10 | «Las motas del kraft despegan y giran como una bandada de estorninos sobre el valle… el papel se vuelve bandada: es la imagen más poética de la pieza y es un wow real.» El clic ya se siente y el título funciona como afiche. Pidió rehacer el acto III: vuelo con ciclo de 4 poses y aterrizaje, metamorfosis sin mitades planas, posta con masa (un reguero), grito sin «láser», cabeza del queltehue y dormidas variadas; reposo final ≥ 0,7 s. |
-| 3 | *(en curso)* | | |
+| 3 | Rechazado | 8/10 | Ya cuenta la historia completa y «el cierre emociona». **Bloqueante:** el reguero rojo que caía de los pájaros «se lee como sangre», y en una pieza sobre megaproyectos energéticos eso cambia el mensaje. Pidió que la posta fuera sin líquido (la plancha riso de la A viaja y se contrae al ojo) y un ojo de 7–8 px en la vigía de turno. |
+| 4 | **Aprobado** | **8,5/10** | «La posta de la A es el nuevo remate… se lee como impresión que vuelve a registro. La palabra ALERTA termina viva en un solo ojo de guardia. Es la metáfora completa en una imagen, y ahí está el wow.» Se aplicaron sus 4 pulidos opcionales (patas fuera de la plancha roja, mitades al 85 % en Λ, granulación y bordes en las aves chicas, destello de 3 cuadros). |
 
 ## Verificador 3 — entrega final
 

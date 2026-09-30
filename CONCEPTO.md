@@ -30,8 +30,9 @@ La guía ya tiene su propia poesía y la pieza la toma al pie de la letra:
   título encaja en registro en el mismo cuadro** y el papel se abolla: el **dato** confirmado.
 * **…todas vuelan.** Cada letra se vuelve **un queltehue** (la M y la V ya son alas). La bandada no
   huye: **baja al potrero y se posa** (ave de suelo): la alerta repartida en el territorio.
-* **La posta.** Al volverse pájaros, ALERTA suelta su rojo, que se junta en **un solo punto**: el ojo de
-  la vigía de turno. Todas duermen de pie **menos una**; el queltehue por fin cierra el suyo.
+* **La posta.** La «A» de ALERTA se vuelve la vigía de turno y vuela con su **plancha roja riso**
+  encima; al posarse, esa plancha se contrae hasta **un solo punto**: su ojo. Todas duermen **menos una**;
+  el queltehue por fin cierra el suyo. (Sin líquidos: el rojo es tinta de imprenta, nunca «sangre».)
   «No se trata de vivir en alerta permanente» (síndrome del vigía, 1.3).
 
 Y como es una *guía de campo*, la lámina describe al SATC **como una especie viva**:
@@ -73,7 +74,7 @@ recuadro **Distribución:** de Arica a Chiloé (mini-mapa).
 | 0,00–0,90 | **I. La vigía y la torre** | Lámina completa (póster). **La torre se traza sola con regla** (0,10–0,72 s): mástil, celosía, tensores rectos, brazos con anemómetros que giran; aparece su rótulo «2» al pie. El queltehue levanta la cabeza con anticipación y sobreimpulso, eriza la cresta y **abre el ojo: el primer rojo** (0,80 s). |
 | 0,86–2,00 | **II. El murmullo y el clic** | ~1300 **motas del kraft se despegan** (dejan un hueco claro), giran juntas en espiral y forman SISTEMA DE / TEMPRANA / COMUNITARIO **solo como puntillado** que tiembla «en dos». **El queltehue grita** (1,40 s: pico abierto, cabeza adelante) y **ALERTA sale de su pupila** letra por letra en un arco rojo. En los 2 cuadros previos las planchas se desregistran; **en el cuadro 60 (2,00 s) todo se imprime en registro**, con sobreimpulso y **golpe de prensa** (el papel se hunde y queda la marca de plancha). |
 | 2,00–3,00 | **Lectura** | El título queda quieto 1 s (la cresta se mueve con el viento, los anemómetros giran). |
-| 3,00–5,00 | **III. La suelta y la posta** | **Onda circular desde el ojo**: cada letra se aprieta, **se parte por su eje y se abre como alas**, da un aletazo y ya es un queltehue que baja al potrero. **El rojo de ALERTA escurre** en un solo trazo de acuarela hasta **el ojo de la vigía de turno**, en primer plano (≈4,0 s). Las demás duermen (cabeza hundida, en una pata); **el queltehue por fin cierra el suyo** (4,18 s). Se escribe la nota *«Comportamiento: cuando una ve, todas vuelan; duermen por turnos.»* Cuadro final quieto 0,5 s. |
+| 3,00–5,00 | **III. La suelta y la posta** | **Onda desde el ojo** (0,5 s, a lo sumo ~6 letras a la vez): cada letra se aprieta, **se parte por su eje y se abre como alas**, da un aletazo y ya es un queltehue que baja al potrero. **La «A» de ALERTA vuela con su plancha roja riso** (el único pájaro rojo de la bandada); las demás letras rojas sueltan su plancha como papel que sale de la prensa. Al posarse, **la plancha roja de la A se contrae hasta su ojo**: la vigía de turno, en primer plano (≈3,9 s). Las demás duermen (cabeza hundida, en una pata); **el queltehue por fin cierra el suyo** (4,18 s). Se escribe la nota *«Comportamiento: cuando una ve, todas vuelan; duermen por turnos.»* Cuadro final quieto 0,5 s. |
 
 ## 4. En la web
 
