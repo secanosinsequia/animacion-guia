@@ -14,7 +14,7 @@ from .textile import burlap
 from .thread import Sprite, Stitch, Yarn, composite, composite_T, knot, running_stitch, blanket_stitch
 
 
-def stencil_mask(W, H, u):
+def stencil_mask(W, H, u, y0=0.30):
     """Estarcido del saco harinero, visto desde el frente en espejo (la tinta está en el revés)."""
     import cairo
     from satc_intro.typography import Font, Word
@@ -22,7 +22,7 @@ def stencil_mask(W, H, u):
     ctx = cairo.Context(surf)
     f = Font("Anton-Regular.ttf")
     lines = [("HARINERA", 118), ("LA ESPERANZA", 62), ("50 KG · FLOR", 46)]
-    y = H * 0.30
+    y = H * y0
     ctx.save()
     ctx.translate(W, 0)
     ctx.scale(-1, 1)                     # en espejo
@@ -44,6 +44,67 @@ def stencil_mask(W, H, u):
     return cv2.GaussianBlur(m, (0, 0), 1.2)
 
 
+# Composición: fracciones del ancho/alto (las medidas de objetos van en u, así no se deforman).
+LAND = dict(
+    sky=0.60, sun=(0.90, 0.15), clouds=[(0.20, 0.13, 0.13, 0.07), (0.45, 0.22, 0.10, 0.055), (0.66, 0.11, 0.09, 0.05)],
+    birds=[(0.56, 0.30, 1.0), (0.60, 0.27, 0.8), (0.63, 0.31, 0.7)],
+    hills=[("#8a6f55", "flannel", "#6f5642", 0.46, [(0.08, 0.40), (0.30, 0.45), (0.52, 0.41)]),
+           ("#6f8f55", "plain", None, 0.50, [(0.35, 0.44), (0.58, 0.47), (0.70, 0.45)]),
+           ("#9a8a4a", "gingham", "#7c6d35", 0.53, [(0.02, 0.50), (0.18, 0.47), (0.40, 0.52)])],
+    hills_bottom=0.75,
+    tower=(0.80, 0.41), tower_hill=[(0.55, 0.62), (-0.14, 0.06), (0.0, 0.0), (0.12, 0.04), (None, 0.07)],
+    tower_hill_bottom=0.78,
+    forest=(0.06, 0.035, 0.47),
+    rows=[[(0.00, 0.56), (0.28, 0.54), (0.36, 0.64), (0.00, 0.70)],
+          [(0.28, 0.54), (0.62, 0.55), (0.66, 0.66), (0.36, 0.64)],
+          [(0.62, 0.55), (1.00, 0.52), (1.00, 0.70), (0.66, 0.66)],
+          [(0.00, 0.70), (0.36, 0.64), (0.40, 0.82), (0.00, 0.86)],
+          [(0.36, 0.64), (0.66, 0.66), (0.70, 0.84), (0.40, 0.82)],
+          [(0.66, 0.66), (1.00, 0.70), (1.00, 0.86), (0.70, 0.84)],
+          [(0.00, 0.86), (0.40, 0.82), (0.44, 1.00), (0.00, 1.00)],
+          [(0.40, 0.82), (0.70, 0.84), (0.72, 1.00), (0.44, 1.00)],
+          [(0.70, 0.84), (1.00, 0.86), (1.00, 1.00), (0.72, 1.00)]],
+    river=[(0.03, 0.55), (0.15, 0.60), (0.26, 0.66), (0.30, 0.78), (0.46, 0.86), (0.58, 0.95), (0.62, 1.02)],
+    fence=((0.29, 0.645), (0.48, 0.705)),
+    houses=[((0.12, 0.79), 144, 108), ((0.45, 0.935), 144, 108), ((0.53, 0.625), 127, 97), ((0.84, 0.935), 144, 108)],
+    apr=(0.21, 0.72),
+    trees=[(0.30, 0.60, 24), (0.64, 0.66, 22), (0.95, 0.66, 26), (0.03, 0.66, 22), (0.60, 0.99, 28)],
+    sheep=[(0.78, 0.76), (0.86, 0.78), (0.72, 0.79)],
+    people=[0.055, 0.905, 0.375, 0.985, 0.595, 0.700, 0.93, 0.985],
+    stakes=[(0.585 + 0.026 * k, 0.800 + 0.006 * k) for k in range(4)],
+    intake=((0.292, 0.622), (0.262, 0.652)),
+)
+TALL = dict(
+    sky=0.36, sun=(0.80, 0.075), clouds=[(0.26, 0.075, 0.30, 0.036), (0.56, 0.165, 0.22, 0.03)],
+    birds=[(0.40, 0.20, 1.0), (0.45, 0.185, 0.8), (0.49, 0.205, 0.7)],
+    hills=[("#8a6f55", "flannel", "#6f5642", 0.30, [(0.10, 0.265), (0.36, 0.30), (0.60, 0.27)]),
+           ("#6f8f55", "plain", None, 0.33, [(0.40, 0.29), (0.62, 0.31), (0.80, 0.30)]),
+           ("#9a8a4a", "gingham", "#7c6d35", 0.35, [(0.02, 0.33), (0.20, 0.31), (0.46, 0.345)])],
+    hills_bottom=0.50,
+    tower=(0.74, 0.268), tower_hill=[(0.36, 0.40), (-0.22, 0.03), (0.0, 0.0), (0.16, 0.02), (None, 0.04)],
+    tower_hill_bottom=0.48,
+    forest=(0.06, 0.036, 0.312),
+    rows=[[(0.00, 0.37), (0.52, 0.355), (0.58, 0.46), (0.00, 0.49)],
+          [(0.52, 0.355), (1.00, 0.35), (1.00, 0.47), (0.58, 0.46)],
+          [(0.00, 0.49), (0.58, 0.46), (0.54, 0.63), (0.00, 0.65)],
+          [(0.58, 0.46), (1.00, 0.47), (1.00, 0.62), (0.54, 0.63)],
+          [(0.00, 0.65), (0.54, 0.63), (0.60, 0.80), (0.00, 0.82)],
+          [(0.54, 0.63), (1.00, 0.62), (1.00, 0.80), (0.60, 0.80)],
+          [(0.00, 0.82), (0.30, 0.81), (0.33, 1.00), (0.00, 1.00)],
+          [(0.30, 0.81), (0.60, 0.80), (0.64, 1.00), (0.33, 1.00)],
+          [(0.60, 0.80), (1.00, 0.80), (1.00, 1.00), (0.64, 1.00)]],
+    river=[(0.03, 0.385), (0.16, 0.44), (0.30, 0.53), (0.26, 0.64), (0.36, 0.76), (0.50, 0.88), (0.58, 1.02)],
+    fence=((0.42, 0.555), (0.74, 0.585)),
+    houses=[((0.17, 0.600), 144, 108), ((0.47, 0.965), 144, 108), ((0.64, 0.475), 127, 97), ((0.84, 0.855), 144, 108)],
+    apr=(0.21, 0.785),
+    trees=[(0.46, 0.44, 24), (0.93, 0.53, 26), (0.05, 0.49, 22), (0.70, 0.99, 28), (0.30, 0.86, 24)],
+    sheep=[(0.78, 0.66), (0.88, 0.675), (0.70, 0.69)],
+    people=[0.07, 0.70, 0.27, 0.985, 0.80, 0.50, 0.94, 0.975],
+    stakes=[(0.555 + 0.045 * k, 0.725 + 0.004 * k) for k in range(4)],
+    intake=((0.345, 0.620), (0.300, 0.635)),
+)
+
+
 def build(W, H, seed=11):
     rng = np.random.default_rng(seed)
     u = min(W, H) / 1080.0
@@ -51,12 +112,13 @@ def build(W, H, seed=11):
     Y = lambda f: f * H
     P = lambda fx, fy: (fx * W, fy * H)
     portrait = H > W
+    Lz = TALL if portrait else LAND
 
-    col, hgt, T = burlap(W, H, seed=seed + 1, stencil=stencil_mask(W, H, u))
+    col, hgt, T = burlap(W, H, seed=seed + 1, stencil=stencil_mask(W, H, u, y0=0.10 if portrait else 0.30))
     canvas = col.copy()
     T0 = T.copy()
     C = np.zeros((H, W), np.float32)
-    info = {}
+    info = {"layout": Lz, "portrait": portrait}
 
     def bake(piece):
         piece.bake(canvas, T, T0, C)
@@ -72,72 +134,61 @@ def build(W, H, seed=11):
 
     m = 40 * u   # margen hasta el borde de lana
     # --- cielo, sol y nubes -------------------------------------------------------------------------
-    bake(Piece([(m, m), (W - m, m), (W - m, Y(0.60)), (m, Y(0.60))], "#9fc4d8", rng, kind="plain", stitch=None,
-               fabric_scale=u, fray=0.6))
-    sx, sy = (P(0.90, 0.15) if not portrait else P(0.80, 0.09))
+    bake(Piece([(m, m), (W - m, m), (W - m, Y(Lz["sky"])), (m, Y(Lz["sky"]))], "#9fc4d8", rng, kind="plain",
+               stitch=None, fabric_scale=u, fray=0.6))
+    sx, sy = P(*Lz["sun"])
     disc, rays = sun(sx, sy, 60 * u, rng, 0, u=u)
     bake(disc)
     for r in rays:
         bake_sprite(r)
-    for (cx, cy, cw, ch) in ([(0.20, 0.13, 0.13, 0.07), (0.45, 0.22, 0.10, 0.055), (0.66, 0.11, 0.09, 0.05)]
-                             if not portrait else [(0.25, 0.08, 0.30, 0.04), (0.55, 0.17, 0.22, 0.035)]):
+    for (cx, cy, cw, ch) in Lz["clouds"]:
         bake(cloud(X(cx), Y(cy), X(cw), Y(ch) * 1.8, rng, 0, u=u))
 
-    for (bx, by, bs) in [(0.56, 0.30, 1.0), (0.60, 0.27, 0.8), (0.63, 0.31, 0.7)]:
+    for (bx, by, bs) in Lz["birds"]:
         cxb, cyb = P(bx, by)
         w_ = 14 * u * bs
         for p0, p1 in (((cxb - w_, cyb - w_ * 0.5), (cxb, cyb)), ((cxb, cyb), (cxb + w_, cyb - w_ * 0.55))):
             bake_sprite(Stitch.render(p0, p1, 2.2 * u, "#2a2522", rng))
 
     # --- cerros de fondo --------------------------------------------------------------------------------
-    hills = [("#8a6f55", "flannel", "#6f5642", 0.46, 0.36, [(0.08, 0.40), (0.30, 0.45), (0.52, 0.41)]),
-             ("#6f8f55", "plain", None, 0.50, 0.40, [(0.35, 0.44), (0.58, 0.47), (0.70, 0.45)]),
-             ("#9a8a4a", "gingham", "#7c6d35", 0.53, 0.44, [(0.02, 0.50), (0.18, 0.47), (0.40, 0.52)])]
-    for colr, kind, c2, base_f, top_f, peaks in hills:
+    for colr, kind, c2, base_f, peaks in Lz["hills"]:
         pts = [(m - 10, Y(base_f))] + [P(px, py) for px, py in peaks] + [(W - m + 10, Y(base_f + 0.02))]
         line = catmull_rom(np.array(pts), 10)
-        poly = np.vstack([line, [(W - m + 10, Y(0.75)), (m - 10, Y(0.75))]])
+        poly = np.vstack([line, [(W - m + 10, Y(Lz["hills_bottom"])), (m - 10, Y(Lz["hills_bottom"]))]])
         bake(Piece(poly, colr, rng, kind=kind, color2=c2, stitch=("#3d2a1e", 9 * u, 7 * u, 1.8 * u), fabric_scale=u))
     # cerro de la torre (derecha)
-    tx, ty = P(0.80, 0.41) if not portrait else P(0.74, 0.43)
-    hill_line = catmull_rom(np.array([P(0.55, 0.62), (tx - X(0.14), ty + Y(0.06)), (tx, ty), (tx + X(0.12), ty + Y(0.04)),
-                                      (W - m + 10, ty + Y(0.07))]), 12)
-    bake(Piece(np.vstack([hill_line, [(W - m + 10, Y(0.78)), P(0.55, 0.78)]]), "#c49a45", rng, kind="cord",
-               stitch=("#6b4b1e", 9 * u, 7 * u, 1.8 * u), fabric_scale=u, angle=0.3))
+    tx, ty = P(*Lz["tower"])
+    th = Lz["tower_hill"]
+    hl = [P(*th[0])] + [((W - m + 10) if dx is None else tx + X(dx), ty + Y(dy)) for dx, dy in th[1:]]
+    hill_line = catmull_rom(np.array(hl), 12)
+    bake(Piece(np.vstack([hill_line, [(W - m + 10, Y(Lz["tower_hill_bottom"])), (hl[0][0], Y(Lz["tower_hill_bottom"]))]]),
+               "#c49a45", rng, kind="cord", stitch=("#6b4b1e", 9 * u, 7 * u, 1.8 * u), fabric_scale=u, angle=0.3))
     info["tower_base"] = np.array([tx, ty + 4 * u])
     # bosque nativo: copas de fieltro apretadas sobre el cerro izquierdo
+    fx0, fdx, fy0 = Lz["forest"]
     for k in range(9):
-        cx = X(0.06 + 0.035 * k + rng.normal(0, 0.006))
-        cy = Y(0.47 + 0.02 * np.sin(k * 1.7) + rng.normal(0, 0.006))
+        cx = X(fx0 + fdx * k + rng.normal(0, 0.006))
+        cy = Y(fy0 + 0.02 * np.sin(k * 1.7) * (0.6 if portrait else 1.0) + rng.normal(0, 0.006 * (0.6 if portrait else 1)))
         r = 26 * u * rng.uniform(0.8, 1.25)
         colr = ["#29462c", "#34553a", "#1f3a26", "#3b5e36"][k % 4]
         bake(Piece(ellipse_poly(cx, cy, r, r * 0.9, wobble=0.06, rng=rng), colr, rng, kind="felt",
                    stitch=("#15261a", 6 * u, 5 * u, 1.3 * u), fabric_scale=u))
 
     # --- potreros de retazos ----------------------------------------------------------------------------
-    rows = [
-        [(0.00, 0.56), (0.28, 0.54), (0.36, 0.64), (0.00, 0.70)],
-        [(0.28, 0.54), (0.62, 0.55), (0.66, 0.66), (0.36, 0.64)],
-        [(0.62, 0.55), (1.00, 0.52), (1.00, 0.70), (0.66, 0.66)],
-        [(0.00, 0.70), (0.36, 0.64), (0.40, 0.82), (0.00, 0.86)],
-        [(0.36, 0.64), (0.66, 0.66), (0.70, 0.84), (0.40, 0.82)],
-        [(0.66, 0.66), (1.00, 0.70), (1.00, 0.86), (0.70, 0.84)],
-        [(0.00, 0.86), (0.40, 0.82), (0.44, 1.00), (0.00, 1.00)],
-        [(0.40, 0.82), (0.70, 0.84), (0.72, 1.00), (0.44, 1.00)],
-        [(0.70, 0.84), (1.00, 0.86), (1.00, 1.00), (0.72, 1.00)],
-    ]
     fabrics = [("#6d9a4a", "gingham", "#4f7a35"), ("#8aa84f", "plain", None), ("#5d8a54", "dots", "#dfe6c6"),
                ("#a5b35a", "cord", None), ("#4f7d3f", "flannel", "#3a5e2e"), ("#7fa35f", "print", "#e3d27a"),
                ("#5f8f3e", "cord", None), ("#91ad5c", "gingham", "#6f8d42"), ("#6a8f4c", "plain", None)]
-    for poly, (c1, kind, c2) in zip(rows, fabrics):
-        pp = np.array([(m - 12 + fx * (W - 2 * m + 24), fy * (H - m) + (m if fy < 0.5 else 0)) for fx, fy in poly])
+    for poly, (c1, kind, c2) in zip(Lz["rows"], fabrics):
+        if portrait:
+            pp = np.array([(m - 12 + fx * (W - 2 * m + 24), fy * H) for fx, fy in poly])
+        else:
+            pp = np.array([(m - 12 + fx * (W - 2 * m + 24), fy * (H - m) + (m if fy < 0.5 else 0)) for fx, fy in poly])
         pp[:, 1] = np.clip(pp[:, 1], m, H - m + 12)
         bake(Piece(pp, c1, rng, kind=kind, color2=c2, stitch=("#3a2a1c", 9 * u, 7 * u, 1.8 * u), fabric_scale=u,
                    angle=rng.normal(0, 0.05)))
 
     # --- el río (raso azul con puntadas de corriente) ----------------------------------------------------
-    river_c = catmull_rom(np.array([P(0.03, 0.55), P(0.15, 0.60), P(0.26, 0.66), P(0.30, 0.78), P(0.46, 0.86),
-                                    P(0.58, 0.95), P(0.62, 1.02)]), 14)
+    river_c = catmull_rom(np.array([P(*p) for p in Lz["river"]]), 14)
     wr = np.linspace(22, 60, len(river_c)) * u
     tang = np.gradient(river_c, axis=0)
     tang /= np.linalg.norm(tang, axis=1, keepdims=True) + 1e-9
@@ -153,7 +204,7 @@ def build(W, H, seed=11):
     info["river"] = river_c
 
     # --- cerco (postes y alambres de lana) ---------------------------------------------------------------
-    f0, f1 = np.array(P(0.29, 0.645)), np.array(P(0.48, 0.705))
+    f0, f1 = np.array(P(*Lz["fence"][0])), np.array(P(*Lz["fence"][1]))
     posts = [f0 + (f1 - f0) * k / 7 for k in range(8)]
     for p in posts:
         bake_yarn(Yarn([p + (0, 6 * u), p - (0, 30 * u)], 4.4 * u, "#5b3e25", rng, fuzz=0.5))
@@ -162,10 +213,9 @@ def build(W, H, seed=11):
     info["fence"] = (f0, f1)
 
     # --- casas, estanque del APR, árboles, ovejas, gente ---------------------------------------------------
-    houses = [dict(c=P(0.12, 0.79), w=X(0.075), h=Y(0.10), wall="#b7342b", roof="#77726c", k="plain"),
-              dict(c=P(0.45, 0.935), w=X(0.075), h=Y(0.10), wall="#3f6fa5", roof="#6a6560", k="stripes"),
-              dict(c=P(0.53, 0.625), w=X(0.066), h=Y(0.09), wall="#e3b33c", roof="#7b7670", k="plain"),
-              dict(c=P(0.84, 0.935), w=X(0.075), h=Y(0.10), wall="#e2d7c0", roof="#6b665f", k="gingham")]
+    looks = [dict(wall="#b7342b", roof="#77726c", k="plain"), dict(wall="#3f6fa5", roof="#6a6560", k="stripes"),
+             dict(wall="#e3b33c", roof="#7b7670", k="plain"), dict(wall="#e2d7c0", roof="#6b665f", k="gingham")]
+    houses = [dict(c=P(*c), w=w_ * u, h=h_ * u, **lk) for (c, w_, h_), lk in zip(Lz["houses"], looks)]
     info["houses"] = []
     for i, hd in enumerate(houses):
         parts, wins, door = house(hd["c"][0], hd["c"][1], hd["w"], hd["h"], rng, 0, wall=hd["wall"],
@@ -181,7 +231,7 @@ def build(W, H, seed=11):
                 (chx + 7 * u, chy + 18 * u)], "#6d4a35", rng, kind="felt", stitch=None, margin=6))
     info["chimney"] = np.array([chx, chy - 8 * u])
     # estanque elevado del agua potable rural (APR)
-    ax, ay = P(0.21, 0.72)
+    ax, ay = P(*Lz["apr"])
     for lx in (-16, -5, 5, 16):
         bake_yarn(Yarn([(ax + lx * u, ay), (ax + lx * 0.6 * u, ay - 58 * u)], 3.2 * u, "#8b8f93", rng, fuzz=0.2,
                        kind="floss"))
@@ -194,14 +244,14 @@ def build(W, H, seed=11):
         for _, sp in running_stitch(st, 3.2 * u, 0.8 * u, 1.3 * u, "#1f2f3a", rng, jitter=0.2):
             bake_sprite(sp)
     # árboles sueltos
-    for (fx, fy, r) in [(0.30, 0.60, 24), (0.64, 0.66, 22), (0.95, 0.66, 26), (0.03, 0.66, 22), (0.60, 0.99, 28)]:
+    for (fx, fy, r) in Lz["trees"]:
         trunks, crowns = round_tree(X(fx), Y(fy), r * u, rng, 0, u=u)
         for y_ in trunks:
             bake_yarn(y_)
         for c_ in crowns:
             bake(c_)
     # ovejas de bouclé
-    for (fx, fy) in [(0.78, 0.76), (0.86, 0.78), (0.72, 0.79)]:
+    for (fx, fy) in Lz["sheep"]:
         cx, cy = P(fx, fy)
         for leg in (-10, -4, 5, 11):
             bake_yarn(Yarn([(cx + leg * u, cy), (cx + leg * u, cy + 16 * u)], 2.6 * u, "#2a2320", rng, fuzz=0.2))
@@ -212,11 +262,11 @@ def build(W, H, seed=11):
                              rng.uniform(3.2, 4.4) * u, "#f1ede4", rng), shadow=0.35)
         bake_sprite(knot((cx - 20 * u, cy - 10 * u), 5.5 * u, "#2b2522", rng))
     # vecinas y vecinos de lana (sin carita)
-    people = [(0.055, 0.905, "#7d3c6a", "dots", "#e8dcc8", "#c68e67", "#3a2a20"),
-              (0.375, 0.985, "#2f6f4f", "gingham", "#e9e1cf", "#9a6a4b", "#1d1612"),
-              (0.595, 0.700, "#c0582f", "print", "#f0d98a", "#d7a47e", "#5a3a22"),
-              (0.93, 0.985, "#3b4f8f", "stripes", "#e8e2d2", "#b98363", "#2a1d15")]
-    for (fx, fy, dc, dk, d2, skin, hair) in people:
+    pp_ = Lz["people"]
+    looks = [("#7d3c6a", "dots", "#e8dcc8", "#c68e67", "#3a2a20"), ("#2f6f4f", "gingham", "#e9e1cf", "#9a6a4b", "#1d1612"),
+             ("#c0582f", "print", "#f0d98a", "#d7a47e", "#5a3a22"), ("#3b4f8f", "stripes", "#e8e2d2", "#b98363", "#2a1d15")]
+    for i, (dc, dk, d2, skin, hair) in enumerate(looks):
+        fx, fy = pp_[2 * i], pp_[2 * i + 1]
         d = doll(X(fx), Y(fy) - 6 * u, 150 * u, rng, 0, dress=dc, dress_kind=dk, dress2=d2, skin=skin, hair=hair,
                  hand_y=Y(fy) - 6 * u - 150 * u * 0.30, u=u)
         _bake_doll(d, canvas, T)
@@ -228,6 +278,8 @@ def build(W, H, seed=11):
         bake_sprite(sp)
     info["u"] = u
     info["W"], info["H"] = W, H
+    info["stakes"] = [np.array(P(*p)) for p in Lz["stakes"]]
+    info["intake"] = (np.array(P(*Lz["intake"][0])), np.array(P(*Lz["intake"][1])))
     return canvas, T, info
 
 
@@ -310,6 +362,23 @@ def _cable(spr, a, b, sag, u, rng):
 def _red_line(canvas, pts, u, rng):
     y = Yarn(catmull_rom(np.array(pts), 16), 8.0 * u, "#c3241c", rng, couch_every=19 * u, couch_color="#8e160f")
     y.draw(canvas, 1e9)
+    return y
+
+
+def exit_points(path, u, depth=26):
+    """Dónde cruza la lana el borde de arriba (y = 0) y la guarda de festón (y = depth·u), buscando
+    desde el final del camino: [(x, depth·u), (x, 0)] en coordenadas de la imagen."""
+    pts = np.asarray(path, np.float64)
+    out = []
+    for yc in (depth * u, 0.0):
+        x = pts[-1, 0]
+        for i in range(len(pts) - 1, 0, -1):
+            a, b = pts[i - 1], pts[i]
+            if (a[1] - yc) * (b[1] - yc) <= 0 and a[1] != b[1]:
+                x = a[0] + (b[0] - a[0]) * (yc - a[1]) / (b[1] - a[1])
+                break
+        out.append((float(x), float(yc)))
+    return out
 
 
 def build_desert(W, H, seed=31):
@@ -354,9 +423,9 @@ def build_desert(W, H, seed=31):
     dd = doll(X(0.33), Y(0.97), 150 * u, rng, 0, dress="#6d3b7a", dress_kind="dots", dress2="#efe2c6",
               skin="#b07a55", hair="#1d1612", u=u)
     _bake_doll(dd, canvas, T)
-    _red_line(canvas, [door, (X(0.40), Y(0.86)), (X(0.62), Y(0.64)), (X(0.66), Y(0.30)), (X(0.70), -20)], u, rng)
+    y = _red_line(canvas, [door, (X(0.40), Y(0.86)), (X(0.62), Y(0.64)), (X(0.66), Y(0.30)), (X(0.70), -20)], u, rng)
     _border(canvas, W, H, u, rng, color="#2f5a8a")
-    return canvas
+    return canvas, exit_points(y.pts, u)
 
 
 def build_towers(W, H, seed=41):
@@ -392,7 +461,7 @@ def build_towers(W, H, seed=41):
     dd = doll(X(0.20), Y(0.97), 150 * u, rng, 0, dress="#c0582f", dress_kind="gingham", dress2="#f0e3c8",
               skin="#c68e67", hair="#3a2a20", u=u)
     _bake_doll(dd, canvas, T)
-    _red_line(canvas, [(X(0.13), Y(0.88)), (X(0.30), Y(0.70)), (X(0.48), Y(0.76)), (X(0.60), Y(0.40)),
-                       (X(0.40), -20)], u, rng)
+    y = _red_line(canvas, [(X(0.13), Y(0.88)), (X(0.30), Y(0.70)), (X(0.48), Y(0.76)), (X(0.60), Y(0.40)),
+                           (X(0.40), -20)], u, rng)
     _border(canvas, W, H, u, rng, color="#7a2e5a")
-    return canvas
+    return canvas, exit_points(y.pts, u)

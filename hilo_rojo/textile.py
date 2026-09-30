@@ -133,7 +133,7 @@ def burlap(W, H, seed=3, ss=2, stencil=None):
                  float(rng.uniform(0.2, 0.6)), 1, cv2.LINE_AA, shift=2)
     col = col * (1 - 0.35 * fuzz[..., None]) + lin("#d9c29a")[None, None, :] * 0.35 * fuzz[..., None]
     if stencil is not None:     # tinta en el revés: apenas sugerida a contraluz
-        trc *= (1 - 0.24 * stencil)[..., None]
+        trc *= (1 - 0.30 * stencil)[..., None]
     return np.clip(col, 0, 1).astype(np.float32), hgt.astype(np.float32), np.clip(trc, 0, 1.2).astype(np.float32)
 
 
@@ -235,7 +235,11 @@ def transmission(rgb_lin, hgt, kind):
     """Luz que atraviesa un retazo: su color (saturado) por la densidad de su tejido."""
     k = TRANS_K.get(kind, 0.3)
     dens = 0.55 + 0.9 * (1 - np.clip(hgt, 0, 1)) if kind not in ("felt", "cord") else 1.0
-    tint = np.clip(rgb_lin, 0, 1) ** 0.85
+    # a contraluz el tinte se satura (la luz atraviesa el teñido): color normalizado ** 1.8
+    c = np.clip(rgb_lin, 0, 1)
+    mx = np.maximum(c.max(axis=-1, keepdims=True), 1e-3)
+    luma = (c * np.array([0.3, 0.55, 0.15], np.float32)).sum(-1, keepdims=True)
+    tint = (c / mx) ** 1.8 * np.clip(luma, 0, 1) ** 0.35
     return (tint * (k * dens if np.ndim(dens) == 0 else k * dens[..., None])).astype(np.float32)
 
 

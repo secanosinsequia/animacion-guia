@@ -16,13 +16,18 @@ INK_THREAD = "#2a2019"
 
 
 # --- texto de un solo trazo (fuentes Hershey, dominio público) -------------------------------------
-def hershey_strokes(text, font, height, x, y, anchor="left", tracking=0.0):
-    """Trazos (polilíneas) del texto, con la línea base en y. height: altura total del texto (de la
-    línea base al punto más alto)."""
+def _hershey_segs(text, font):
     f = HersheyFonts()
     f.load_default_font(font)
     f.normalize_rendering(100)
-    segs = list(f.lines_for_text(text))
+    return list(f.lines_for_text(text))
+
+
+def hershey_strokes(text, font, height, x, y, anchor="left", tracking=0.0, ref=None):
+    """Trazos (polilíneas) del texto, con la línea base en y. height: altura total del texto (de la
+    línea base al punto más alto); con ref, la altura de ese texto de referencia (p. ej. «H», para que
+    varias líneas tengan la misma escala y la misma línea base)."""
+    segs = _hershey_segs(text, font)
     strokes, cur = [], None
     for (a, b) in segs:
         if cur is not None and np.allclose(cur[-1], a):
@@ -35,6 +40,9 @@ def hershey_strokes(text, font, height, x, y, anchor="left", tracking=0.0):
         strokes.append(cur)
     ys = np.concatenate([np.asarray(s)[:, 1] for s in strokes])
     base_y, top_y = float(ys.min()), float(ys.max())
+    if ref is not None:
+        rs = np.array([p for sg in _hershey_segs(ref, font) for p in sg], np.float64)
+        base_y, top_y = float(rs[:, 1].min()), float(rs[:, 1].max())
     k = height / max(1e-6, top_y - base_y)
     xs = np.concatenate([np.asarray(s)[:, 0] for s in strokes])
     w = (xs.max() - xs.min()) * k * (1 + tracking)
@@ -47,42 +55,52 @@ def hershey_strokes(text, font, height, x, y, anchor="left", tracking=0.0):
 
 
 # --- la aguja ---------------------------------------------------------------------------------------
-def needle_sprite(back, tip, width, hide_from=None):
-    """Aguja de acero: brillo a lo largo, ojo abierto, sombra. hide_from: fracción desde la cual la
-    punta ya entró en la tela (no se ve)."""
-    back, tip = np.asarray(back, np.float64), np.asarray(tip, np.float64)
+def _needle_shape(xx, yy, back, tip, width):
     d = tip - back
     L = float(np.hypot(*d)) + 1e-9
     t = d / L
     n = np.array([-t[1], t[0]])
-    pad = width * 3 + 6
+    qx, qy = xx - back[0], yy - back[1]
+    s = (qx * t[0] + qy * t[1]) / L
+    e = qx * n[0] + qy * n[1]
+    r = width / 2 * np.clip(np.where(s < 0.70, 1.0, (1 - s) / 0.30), 0, 1) ** 0.75
+    r = np.where((s < -0.01) | (s > 1), 0, r)
+    r = np.where(s < 0.035, width / 2 * np.clip(s / 0.035, 0, 1) ** 0.5, r)     # cabeza redondeada
+    a = np.clip(r - np.abs(e) + 0.5, 0, 1)
+    return a, s, e, r, L
+
+
+def needle_sprite(back, tip, width, hide_from=None, lift=1.0):
+    """Aguja de acero (de lana, grande): brillo a lo largo, ojo abierto y sombra que nace en la punta
+    (una aguja clavada toca la tela solo ahí). hide_from: fracción desde la cual la punta ya entró en
+    la tela. lift: cuánto se separa de la tela la cabeza (sombra más lejos y difusa)."""
+    back, tip = np.asarray(back, np.float64), np.asarray(tip, np.float64)
+    off = np.array([0.55, 0.75]) * width * 2.6 * lift
+    pad = width * 3 + 6 + float(np.abs(off).max())
     x0 = int(np.floor(min(back[0], tip[0]) - pad))
     y0 = int(np.floor(min(back[1], tip[1]) - pad))
     x1 = int(np.ceil(max(back[0], tip[0]) + pad))
     y1 = int(np.ceil(max(back[1], tip[1]) + pad))
     yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float32) + 0.5
-    qx, qy = xx - back[0], yy - back[1]
-    s = (qx * t[0] + qy * t[1]) / L
-    e = qx * n[0] + qy * n[1]
-    r = width / 2 * np.clip(np.where(s < 0.72, 1.0, (1 - s) / 0.28), 0, 1) ** 0.8
-    r = np.where((s < -0.02) | (s > 1), 0, r)
-    r = np.where(s < 0.03, width / 2 * np.clip(s / 0.03, 0, 1) ** 0.5, r)
-    a = np.clip(r - np.abs(e) + 0.5, 0, 1)
-    # ojo: ranura alargada cerca del extremo trasero
-    eye = (np.abs(e) < width * 0.18) & (s > 0.04) & (s < 0.12)
-    a = np.where(eye, a * 0.05, a)
+    a, s, e, r, L = _needle_shape(xx, yy, back, tip, width)
+    # ojo: ranura alargada cerca de la cabeza
+    eye = np.clip(width * 0.2 - np.abs(e) + 0.5, 0, 1) * np.clip(np.minimum(s - 0.035, 0.105 - s) * L + 0.5, 0, 1)
+    a = a * (1 - 0.95 * eye)
     if hide_from is not None:
         a = a * np.clip((hide_from - s) * L / 1.5 + 0.5, 0, 1)
     dz = np.clip(e / np.maximum(r, 1e-3), -1, 1)
-    spec = np.exp(-((dz + 0.35) / 0.22) ** 2) * 0.9 + np.exp(-((dz - 0.55) / 0.3) ** 2) * 0.15
-    base = 0.30 + 0.25 * (1 - np.abs(dz))
-    val = np.clip(base + spec, 0, 1.4)
-    steel = lin("#b9c0c6")
-    rgb = steel[None, None, :] * val[..., None] + np.array([0.02, 0.02, 0.025])[None, None, :]
+    spec = np.exp(-((dz + 0.38) / 0.20) ** 2) * 1.05 + np.exp(-((dz - 0.55) / 0.28) ** 2) * 0.18
+    base = 0.22 + 0.30 * (1 - np.abs(dz))
+    val = np.clip(base + spec, 0, 1.5) * (1 - 0.55 * np.clip((np.abs(dz) - 0.72) / 0.28, 0, 1))   # canto oscuro
+    steel = lin("#c3c9cf")
+    rgb = steel[None, None, :] * val[..., None] + np.array([0.012, 0.014, 0.018])[None, None, :]
     a = a.astype(np.float32)
-    sh = cv2.GaussianBlur(a, (0, 0), 2.2)
-    sh = cv2.warpAffine(sh, np.float32([[1, 0, 5], [0, 1, 6]]), (sh.shape[1], sh.shape[0]))
-    return Sprite(x0, y0, (rgb * a[..., None]).astype(np.float32), a, sh * 0.7)
+    # sombra: la punta toca la tela (o la sombra entra con ella), la cabeza está en el aire
+    sh_tip = tip if hide_from is None else back + (tip - back) * hide_from
+    sa, ss_, _, _, _ = _needle_shape(xx, yy, back + off, sh_tip + off * (0.15 if hide_from is not None else 0.55),
+                                    width)
+    sh = cv2.GaussianBlur(sa.astype(np.float32), (0, 0), 1.2 + 1.6 * lift)
+    return Sprite(x0, y0, (rgb * a[..., None]).astype(np.float32), a, sh * 0.75)
 
 
 # --- casas, árboles, sol, nubes ----------------------------------------------------------------------
