@@ -621,8 +621,8 @@ def layout_for(W, H, sc):
         main_x = (F(440), F(1480))
         z0 = 1.66
         title = dict(rect=tuple(F(v) for v in (540, 832, 1380, 1024)), font="timesi", lines=[
-            (F(905), F(40), [("Sistema", "floss"), ("de", "floss"), ("Alerta", "wool"), ("Temprana", "floss")]),
-            (F(966), F(40), [("Comunitario", "floss")]),
+            (F(905), F(40), [("Sistema", "floss"), ("de", "floss"), ("Alerta", "wool")]),
+            (F(966), F(40), [("Temprana", "floss"), ("Comunitario", "floss")]),
             (F(1006), F(15), [("Red Comunitaria de Alerta Energética", "small")])])
         line = (F(960), F(150), 0.000028 / f)
         nbx = [(F(-190), F(380)), (F(1540), F(2110))]

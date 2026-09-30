@@ -314,16 +314,23 @@ class World:
         font = spec.get("font", "timesi")
         cx = (x0 + x1) / 2
         dark = spec.get("color", "#2b211b")
+        # medir todas las líneas y achicar lo necesario para que quepan dentro de la tira (con margen)
+        inner = (x1 - x0) * 0.88
+        fnt = lambda kind: "timesr" if kind == "small" else font
+
+        def trace(words, cap, base, k=1.0):
+            ws = [(*hershey_strokes_es(txt, fnt(kind), cap * 2 * k, 0, base * 2, anchor="left", ref="H"), kind)
+                  for (txt, kind) in words]
+            gaps = [cap * 2 * k * (0.8 if "wool" in (ws[i][2], ws[i + 1][2]) else 0.64) for i in range(len(ws) - 1)]
+            return ws, gaps, sum(w for _, w, _ in ws) + sum(gaps)
+
+        widest = max(trace(words, cap, base)[2] for (base, cap, words) in spec["lines"])
+        fit = min(1.0, inner / widest)
         for (base, cap, words) in spec["lines"]:
-            ws = []
-            for (txt, kind) in words:
-                f_ = "timesr" if kind == "small" else font
-                strokes, w = hershey_strokes_es(txt, f_, cap * 2, 0, base * 2, anchor="left", ref="H")
-                ws.append((strokes, w, kind))
-            space = cap * 2 * 0.42
-            total = sum(w for _, w, _ in ws) + space * (len(ws) - 1)
+            ws, gaps, total = trace(words, cap, base, fit)
+            space_list = gaps + [0.0]
             x = cx - total / 2
-            for strokes, w, kind in ws:
+            for (strokes, w, kind), space in zip(ws, space_list):
                 for st in strokes:
                     st = st + np.array([x, 0.0])
                     if kind == "wool":
