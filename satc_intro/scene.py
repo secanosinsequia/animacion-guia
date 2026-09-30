@@ -30,7 +30,7 @@ FPS = 30
 DURATION = 5.0
 
 T = dict(tower=(0.10, 0.72), legend2=0.62, alert=0.70, eye=0.80, lift=(0.86, 1.12), shout=(1.40, 1.62),
-         click=2.00, release=3.00, relay=3.16, sleep=4.18, note=(4.18, 4.48))
+         click=2.00, release=3.00, sleep=3.98, note=(3.95, 4.20))
 
 
 def layout(W, H):
@@ -48,7 +48,7 @@ def layout(W, H):
             map_x=1824 * u, map_top=136 * v, map_bottom=430 * v,
             title_cx=1075 * u, title_w=560 * u, title_top=150 * v, title_gap=14 * v, title_small_cap=40 * v,
             land_box=(700 * u, 800 * v, 1700 * u, 938 * v), land_h=(26 * v, 42 * v),
-            duty_pt=s(800, 934), duty_h=98 * v,
+            duty_pt=s(1010, 936), duty_h=98 * v,
             note_cx=1075 * u, note_y=(300 * v, 352 * v), note_cap=26 * u,
         )
     u = W / 1080.0
@@ -163,7 +163,11 @@ class Scene:
         self.murmur = Murmur(sources, targets, rng, center=np.array([(x0b + x1b) / 2, (y0b + y1b) / 2]), u=u,
                              t_lift=T["lift"], t_print=T["click"] - 2.0 / FPS)
         eye_rel = self.q.eye_screen(T["release"])
-        self.flock = Flock(self.title, L, rng, t_release=T["release"], eye=eye_rel, relay_t0=T["relay"])
+        self.flock = Flock(self.title, L, rng, W, H, t_release=T["release"], eye=eye_rel)
+        # colores efectivos de las aves: los mismos pigmentos que la vigía, sobre el kraft
+        kraft = self.paper.reshape(-1, 3).mean(axis=0)
+        self.bird_colors = dict(back=kraft * lin("#7d7465") ** 0.95, head=kraft * lin("#8f8a80") ** 0.95,
+                                white=self.col["white"], ink=self.col["ink"], red=self.col["red"])
 
         # --- grano fijo al papel, distinto en cada plancha --------------------------------------------------
         fine = fbm((H, W), 1.6, r2, octaves=2)
@@ -244,6 +248,7 @@ class Scene:
         # El título: base blanca (solo bajo el rojo, en registro) -> plancha roja -> plancha negra
         tm = {"white": M["white"], "ink": M["ink_plate"], "red": M["red"]}
         self.title.draw(tm, t)
+        self.flock.draw_letters(tm, t)
         a_w = M["white"].array()
         if a_w.any():
             self._over(img, a_w * self.g_white, self.col["white"], 0.9)
@@ -254,21 +259,16 @@ class Scene:
         if a_i.any():
             self._glaze(img, a_i * self.g_ink, self.col["ink"], 1.35)
 
-        # III. La bandada, la posta del rojo y la vigía de turno
-        fm = {"ink": M["ink"], "white": M["white_over"], "grey": M["grey"], "red_over": M["red_over"],
-              "white_over": M["white_over"], "relay": M["relay"], "glint": M["glint"]}
-        self.flock.draw(fm, t)
-        self._over(img, M["grey"].array(), self.col["grey"], 0.97)
-        self._over(img, M["white_over"].array() * (0.8 + 0.2 * self.g_white), self.col["white"], 0.95)
-        self._over(img, M["ink"].array(), self.col["ink"], 0.95)
+        # III. La bandada (cada ave compuesta por separado, de atrás hacia adelante) y la posta del rojo
+        self.flock.render(img, t, self.bird_colors, self.g_white)
+        self.flock.draw_relay(M["relay"], t)
         a_rel = M["relay"].array()
         if a_rel.any():
             a_rel = self._rough(a_rel)
-            rim = np.clip(a_rel - cv2.GaussianBlur(a_rel, (0, 0), 1.6 * L["u"]), 0, 1)
-            self._over(img, a_rel * (0.85 + 0.15 * self.g_red), self.col["red"], 0.96)
-            self._over(img, rim * 2.0, self.col["red_dark"], 0.55)
-        self._over(img, M["red_over"].array(), self.col["red"], 1.0)
-        self._over(img, M["glint"].array(), self.col["white"], 0.95)
+            rim = np.clip(a_rel - cv2.GaussianBlur(a_rel, (0, 0), 1.8 * L["u"]), 0, 1)
+            gran = 0.8 + 0.25 * (1 - self.ph)
+            self._over(img, np.clip(a_rel * gran, 0, 1), self.col["red"], 0.95)
+            self._glaze(img, rim * 1.6, self.col["red_dark"], 0.9)
 
         # Nota de comportamiento (voz de guía de campo)
         self._note(img, t)

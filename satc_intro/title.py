@@ -173,15 +173,16 @@ class Title:
                 masks[plate].set_alpha(1.0)
                 ctx.fill()
                 ctx.restore()
-            # un único «smear» dibujado: la letra estirada entre el cuadro anterior y el actual
+            # un único «smear» dibujado por letra, recién cuando ya se separó del ojo (sin línea al ojo)
             if 0 < u < 1:
                 pp, sp, _ = self.letter_flight(k, t - 1.0 / FPS)
                 v = pos - pp
                 sp_len = np.hypot(*v)
-                if sp_len > 6 * self.lay["u"]:
+                away = np.hypot(*(pos - self.eye_fn(self.depart[k])))
+                if sp_len > 6 * self.lay["u"] and away > 70 * self.lay["u"]:
                     ang = np.arctan2(v[1], v[0])
-                    mid = (pos + pp) / 2
-                    stretch = 1.0 + sp_len / max(8.0, (L.box[3] - L.box[1]) * s)
+                    mid = pos - v * 0.35
+                    stretch = min(1.8, 1.0 + sp_len / max(8.0, (L.box[3] - L.box[1]) * s))
                     ctx = masks["red"].ctx
                     ctx.save()
                     cx, cy = L.center
@@ -189,9 +190,26 @@ class Title:
                     ctx.rotate(ang)
                     ctx.scale(stretch, 0.8)
                     ctx.rotate(-ang)
-                    ctx.scale((s + sp) / 2, (s + sp) / 2)
+                    ctx.scale(s, s)
                     ctx.translate(-cx, -cy)
                     L.draw(ctx)
-                    masks["red"].set_alpha(0.35)
+                    masks["red"].set_alpha(0.3)
                     ctx.fill()
                     ctx.restore()
+        # salpicadura: cada letra sale de la pupila con unas gotas rojas (6–8 px) que se abren y se apagan
+        uu = self.lay["u"]
+        for k, L in enumerate(self.alerta.letters):
+            d = (t - self.depart[k]) * FPS
+            if not (0 <= d < 6):
+                continue
+            eye = self.eye_fn(self.depart[k])
+            p1, _, _ = self.letter_flight(k, self.depart[k] + 2.0 / FPS)
+            dirv = p1 - eye
+            base = np.arctan2(dirv[1], dirv[0])
+            r = np.random.default_rng(1000 + k)
+            for j in range(3):
+                a = base + r.uniform(-0.6, 0.6)
+                dist = (10 + r.uniform(12, 30) * (1 - (1 - d / 6) ** 2)) * uu
+                q = eye + np.array([np.cos(a), np.sin(a)]) * dist
+                rad = r.uniform(3.0, 4.0) * uu * (1 - d / 7)
+                masks["red"].dot(q[0], q[1], rad, 1.0)
