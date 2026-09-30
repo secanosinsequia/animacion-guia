@@ -208,7 +208,7 @@ class Scene:
             pts = [(bx - wb / 2, by), (bx + wb / 2, by), (bx - wt / 2, waist), (bx + wt / 2, waist), (bx, by - hgt),
                    (bx - hgt * 0.3, by - hgt * 0.8), (bx + hgt * 0.3, by - hgt * 0.8)]
             sps = [self._hole(np.array(p_), np.random.default_rng(int(p_[0] * 7 + p_[1] * 3)), faint=True,
-                              R=3.0 * u) for p_ in pts]
+                              R=4.2 * u, k=0.9) for p_ in pts]
             out.append((float(self.route_arc[i + 1]), sps))
         return out
 
@@ -220,7 +220,7 @@ class Scene:
                     pts.append(p)
         return pts
 
-    def _hole(self, p, rng, faint=False, R=None):
+    def _hole(self, p, rng, faint=False, R=None, k=None):
         """Agujero que deja una puntada al sacarla. faint: apenas una marca (memoria, no mancha)."""
         u = self.u
         R = 2.2 * u if R is None else R
@@ -233,7 +233,7 @@ class Scene:
         core = np.clip(R * 0.6 * wob - d + 0.5, 0, 1)
         rim = np.clip(1 - np.abs(d - R * 1.15 * wob) / (0.8 * u), 0, 1)
         lit = np.clip((dx * 0.64 + dy * 0.56) / (d + 1e-3), 0, 1)
-        k = 0.55 if faint else 1.0
+        k = (0.55 if faint else 1.0) if k is None else k
         kr = 1.15 if faint else 1.0                                     # el anillo algo más marcado
         a = np.clip((core * 0.8 + rim * (0.22 + 0.32 * lit) * kr) * k, 0, 1).astype(np.float32)
         hole_col = lin("#d9ccb4") if faint else lin("#1e150e")        # por el agujero se ve la pared, clara
@@ -362,7 +362,7 @@ class Scene:
                   + g * 1.05 * lam / (2 * np.pi) * np.sin(ph))
             de = g * (0.06 * e + 1.8 * u * np.cos(ph) * (0.6 + 0.4 * wob2))
             # los extremos se ladean hacia el hilo (las casas se inclinan)
-            de = de + 1.5 * u * np.abs(tug) * np.clip(e / (120 * u), -1, 1) * side
+            de = de + 3.0 * u * np.abs(tug) * np.clip(e / (120 * u), -1, 1) * side
             DX += ds * t[0] + de * n[0]
             DY += ds * t[1] + de * n[1]
             hgt = np.abs(np.sin(ph / 2)) ** 0.5
@@ -482,6 +482,15 @@ class Scene:
         # (la torre del cerro ya está a la vista: calca desde la primera torre escondida, la que está junto a
         # ella, y rodea cada torre con un lazo de lana, como se marca un lugar en un mapa)
         way = [self.hold_hand]
+        # si la ruta vuelve por donde subió la lana (una horquilla), la subida se abre en curva hacia afuera
+        d1 = route[1] - self.hold_hand
+        if len(route) > 2 and np.linalg.norm(d1) > 1:
+            d2 = route[2] - route[1]
+            if np.dot(d1, d2) / (np.linalg.norm(d1) * np.linalg.norm(d2) + 1e-9) < -0.3:
+                perp = np.array([-d1[1], d1[0]]) / np.linalg.norm(d1)
+                if np.dot(perp, d2) > 0:
+                    perp = -perp
+                way.append((self.hold_hand + route[1]) / 2 + perp * 0.45 * np.linalg.norm(d1))
         loops = []
         for p_ in route[1:]:
             d_ = _unit(p_ - way[-1])
@@ -989,25 +998,28 @@ def layout_for(W, H, sc):
     des = build_desert(*nb[0])
     tow = build_towers(*nb[1])
     nb_u = [min(s_) / 1080 for s_ in nb]
-    sub = [("Guía para comunidades ante megaproyectos de energía", "small")]
+    sub1 = [("Guía para comunidades ante", "small")]
+    sub2 = [("megaproyectos de energía", "small")]
     if land:
         main_x = (F(480), F(1440))
         z0 = 1.8
-        title = dict(rect=tuple(F(v) for v in (610, 790, 1310, 1012)), font="timesi", lines=[
-            (F(840), F(33), [("Sistema", "floss"), ("de", "floss")]),
-            (F(887), F(33), [("Alerta", "wool"), ("Temprana", "floss")]),
-            (F(934), F(33), [("Comunitario", "floss")]),
-            (F(978), F(22), sub)])
+        title = dict(rect=tuple(F(v) for v in (560, 750, 1360, 1016)), font="timesi", lines=[
+            (F(803), F(36), [("Sistema", "floss"), ("de", "floss")]),
+            (F(853), F(36), [("Alerta", "wool"), ("Temprana", "floss")]),
+            (F(903), F(36), [("Comunitario", "floss")]),
+            (F(946), F(27), sub1),
+            (F(981), F(27), sub2)])
         line = (F(960), F(150), 0.000028 / f)
         nbx = [(F(-150), F(420)), (F(1500), F(2070))]
     else:
         main_x = (F(280), F(800))
         z0 = 1.97
-        title = dict(rect=tuple(F(v) for v in (130, 1290, 950, 1640)), font="timesi", lines=[
-            (F(1370), F(46), [("Sistema", "floss"), ("de", "floss")]),
-            (F(1442), F(46), [("Alerta", "wool"), ("Temprana", "floss")]),
-            (F(1514), F(46), [("Comunitario", "floss")]),
-            (F(1580), F(22), sub)])
+        title = dict(rect=tuple(F(v) for v in (130, 1290, 950, 1676)), font="timesi", lines=[
+            (F(1368), F(46), [("Sistema", "floss"), ("de", "floss")]),
+            (F(1438), F(46), [("Alerta", "wool"), ("Temprana", "floss")]),
+            (F(1508), F(46), [("Comunitario", "floss")]),
+            (F(1572), F(29), sub1),
+            (F(1614), F(29), sub2)])
         line = (F(540), F(222), 0.000026 / f)
         nbx = [(F(-190), F(250)), (F(830), F(1270))]
     L = dict(line=line, main=dict(size=(sc.W, sc.H), x=main_x),

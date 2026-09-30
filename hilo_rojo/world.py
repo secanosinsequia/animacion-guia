@@ -384,18 +384,28 @@ class World:
             ws, gaps, total = trace(words, cap, base, fit)
             space_list = gaps + [0.0]
             x = cx - total / 2
+            x_line0 = x
+            ph_line = rng.uniform(0, 2 * np.pi)
             for (strokes, w, kind), space in zip(ws, space_list):
                 if kind == "wool":
                     xs_ = [float(np.mean(np.asarray(st_)[:, 0])) for st_ in strokes]
                     cut_x = max(xs_) - 0.16 * w if xs_ else 1e9      # la última letra
-                for st in strokes:
-                    st = st + np.array([x, 0.0])
-                    # bordado a mano: cada trazo con su línea base, su giro y su escala
-                    c_ = st.mean(axis=0)
-                    th_ = np.deg2rad(rng.normal(0, 0.6))
-                    sc_ = 1 + rng.normal(0, 0.015)
+                # bordado a mano: la línea base ondula a lo largo del renglón y cada letra tiene su giro,
+                # su tamaño y su altura (dos «a» nunca salen iguales); el punto y la tilde van con su letra
+                sts = [np.asarray(st_, np.float64) + np.array([x, 0.0]) for st_ in strokes]
+                gid = _glyph_groups(sts, 0.1 * cap * 2 * fit)
+                gtf = {}
+                for g in sorted(set(gid)):
+                    pts_g = np.vstack([sts[i_] for i_ in range(len(sts)) if gid[i_] == g])
+                    c_ = pts_g.mean(axis=0)
+                    th_ = np.deg2rad(rng.normal(0, 1.4 if kind != "small" else 1.0))
+                    sc_ = 1 + rng.normal(0, 0.03 if kind != "small" else 0.02)
                     R_ = np.array([[np.cos(th_), -np.sin(th_)], [np.sin(th_), np.cos(th_)]]) * sc_
-                    st = (st - c_) @ R_.T + c_ + np.array([0, rng.normal(0, 0.5) * u2])
+                    wave = 1.5 * u2 * np.sin(2 * np.pi * (c_[0] - x_line0) / max(total * 1.15, 1.0) + ph_line)
+                    gtf[g] = (R_, c_, wave + rng.normal(0, 0.9 * u2))
+                for i_s, st in enumerate(sts):
+                    R_, c_, dy_ = gtf[gid[i_s]]
+                    st = (st - c_) @ R_.T + c_ + np.array([0, dy_])
                     if kind == "wool":
                         if len(st) < 2:
                             continue
@@ -427,7 +437,7 @@ class World:
                             a_, b_ = (a_ + b_) / 2 - d_ * 1.5 * u2, (a_ + b_) / 2 + d_ * 1.5 * u2
                         items.append(Stitch.render(a_, b_, (2.0 if kind == "small" else 2.6) * u2, col_, rng))
                     elif kind == "small":
-                        for _, sp in backstitch(st, 3.0 * u2, 2.0 * u2, col_, rng, jitter=0.06):
+                        for _, sp in backstitch(st, 3.4 * u2, 2.3 * u2, col_, rng, jitter=0.08):
                             items.append(sp)
                     else:
                         for _, sp in backstitch(st, 6.2 * u2, 2.5 * u2, dark, rng, jitter=0.2):
@@ -450,10 +460,10 @@ class World:
             pm = np.zeros(layer_a.shape, np.float32)
             for st in tail:
                 q_ = np.round((np.asarray(st) - np.array([ox, oy])) * 8).astype(np.int32)
-                cv2.polylines(pm, [q_], False, 1.0, max(1, int(round(1.8 * u2))), cv2.LINE_AA, shift=3)
+                cv2.polylines(pm, [q_], False, 1.0, max(1, int(round(2.8 * u2))), cv2.LINE_AA, shift=3)
             grain = 0.62 + 0.38 * np.random.default_rng(78).random(pm.shape).astype(np.float32)
             pm = cv2.GaussianBlur(pm, (0, 0), 0.5) * grain * strip.a
-            layer_rgb = layer_rgb * (1 - 0.7 * pm)[..., None] + lin("#57534f")[None, None, :] * (0.7 * pm)[..., None]
+            layer_rgb = layer_rgb * (1 - 0.85 * pm)[..., None] + lin("#4d4a47")[None, None, :] * (0.85 * pm)[..., None]
         self.title_check = self._title_recall(refs, emb_a, (ox, oy), u2)
         layer_rgb = layer_rgb * (1 - emb_a)[..., None] + emb_rgb
         layer_a = np.maximum(layer_a, emb_a)
@@ -715,7 +725,7 @@ class World:
                 part = seg[max(0, k0 - 1):min(len(seg), k + 1)]
                 if len(part) >= 2:
                     col = WOOL if red[k0] else HEMP
-                    wdt = self.line_w * z * (1.4 if red[k0] else 1.0)
+                    wdt = self.line_w * z * (1.9 if red[k0] else 1.0)     # la lana roja, gruesa: se ve
                     y = Yarn(part, wdt, col, np.random.default_rng(7 + k0), fuzz=0.9 if red[k0] else 1.2,
                              step=max(1.0, 1.6 * u))
                     for ch in y.chunks:
@@ -1088,6 +1098,14 @@ class World:
                 bl = cv2.GaussianBlur(out, (0, 0), 3.4 * self.u)
                 dm = dm[..., None]
                 out = out * (1 - dm) + bl * dm
+            # de cerca, la cámara mira la tela un poco desde arriba: la parte de arriba está más cerca (se
+            # agranda) y el foco cae hacia arriba y hacia abajo como en una lente, no como un filtro
+            kp = 0.028 * float(np.clip((zr - 1.15) / 0.4, 0, 1))
+            if kp > 0.002:
+                src = np.float32([[0, 0], [W, 0], [W, H], [0, H]])
+                dst = np.float32([[-W * kp, 0], [W * (1 + kp), 0], [W, H], [0, H]])
+                out = cv2.warpPerspective(out, cv2.getPerspectiveTransform(src, dst), (W, H), flags=cv2.INTER_LINEAR,
+                                          borderMode=cv2.BORDER_REFLECT)
         # desenfoque de movimiento (obturador abierto mientras la cámara se desplaza)
         prev = self.camera(tq - 1 / 12)
         if abs(prev["z"] - z) < 0.02 * z:
@@ -1110,6 +1128,24 @@ class World:
             out = cv2.warpAffine(out, np.float32([[1, 0, jx], [0, 1, jy]]), (W, H), flags=cv2.INTER_LINEAR,
                                  borderMode=cv2.BORDER_REFLECT)
         return np.clip(out, 0, 1)
+
+
+def _glyph_groups(strokes, tol):
+    """Agrupa los trazos de una palabra por letra: trazos que se superponen o se tocan a lo ancho (a menos
+    de `tol`): el palito de la a con su panza, el punto de la i, la tilde o el travesaño con su letra."""
+    iv = [(float(np.min(st[:, 0])), float(np.max(st[:, 0]))) for st in strokes]
+    order = np.argsort([a for a, _ in iv])
+    gid = [0] * len(strokes)
+    g, hi_g = -1, -1e18
+    for idx in order:
+        lo, hi = iv[idx]
+        if lo > hi_g + tol:
+            g += 1
+            hi_g = hi
+        else:
+            hi_g = max(hi_g, hi)
+        gid[idx] = g
+    return gid
 
 
 def _blur_sprite(sp, sig):

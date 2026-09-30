@@ -76,13 +76,16 @@ def hershey_strokes_es(text, font, height, x, y, anchor="left", ref="H"):
         cs, _ = hershey_strokes(base[:i + 1], font, height, 0.0, y, anchor="left", ref=ref)
         mine = [p_ for p_ in cs if float(np.min(p_[:, 0])) > x_pre - 0.5] or cs[-1:]
         pts = np.vstack(mine)
-        if c in "íÍ":          # la i con tilde no lleva punto
+        if c in "íÍ":          # la i con tilde no lleva punto (y la tilde va donde iba el punto, no más arriba)
             dots = [p_ for p_ in mine if np.ptp(p_[:, 0]) < 0.15 * height and np.ptp(p_[:, 1]) < 0.15 * height]
             for dt in dots:
                 for j, o in enumerate(out):
                     if o.shape == dt.shape and np.allclose(o - np.array([ox, 0.0]), dt):
                         out.pop(j)
                         break
+            stem = [p_ for p_ in mine if not any(p_ is d_ for d_ in dots)]
+            if stem:
+                pts = np.vstack(stem)
         cx = float(pts[:, 0].mean()) + ox
         top = float(pts[:, 1].min())
         h = height
@@ -169,13 +172,15 @@ def house(cx, base, w, h, rng, t, wall="#c0392b", roof="#6e6a66", wall_kind="pla
     c0 = np.array([cx, base])
     x0, x1 = cx - w / 2, cx + w / 2
     top = base - h
-    wall_poly = [(x0, base), (x0, top), (x1, top), (x1, base)]
+    jit = (lambda: rng.normal(0, 0.03 * w, 2)) if vary else (lambda: np.zeros(2))   # cortado a tijera
+    wall_poly = [np.array(p_) + jit() for p_ in [(x0, base), (x0, top), (x1, top), (x1, base)]]
     parts.append(Piece(_rot(wall_poly, c0, ang), wall, rng, kind=wall_kind, t_place=t,
                        stitch=("#3d2a1e", 7 * u, 5 * u, 1.6 * u), fabric_scale=u))
     ov = w * (rng.uniform(0.06, 0.16) if vary else 0.12)
     rise = h * (rng.uniform(0.45, 0.80) if vary else 0.62)
     ridge = w * (rng.uniform(0.0, 0.14) if vary else 0.08)
-    roof_poly = [(x0 - ov, top + 4 * u), (cx - ridge, top - rise), (cx + ridge, top - rise), (x1 + ov, top + 4 * u)]
+    roof_poly = [np.array(p_) + jit() for p_ in [(x0 - ov, top + 4 * u), (cx - ridge, top - rise),
+                                                 (cx + ridge, top - rise), (x1 + ov, top + 4 * u)]]
     parts.append(Piece(_rot(roof_poly, c0, ang), roof, rng, kind=roof_kind, t_place=t,
                        stitch=("#2b2622", 7 * u, 5 * u, 1.6 * u), fabric_scale=u, angle=np.pi / 2 + ang))
     dw, dh = w * rng.uniform(0.2, 0.27), h * rng.uniform(0.46, 0.58)
@@ -192,7 +197,8 @@ def house(cx, base, w, h, rng, t, wall="#c0392b", roof="#6e6a66", wall_kind="pla
         ww = w * rng.uniform(0.15, 0.21)
         wh = ww * rng.uniform(0.9, 1.25)
         wy = top + h * rng.uniform(0.16, 0.26)
-        poly = _rot([(wx - ww / 2, wy), (wx + ww / 2, wy), (wx + ww / 2, wy + wh), (wx - ww / 2, wy + wh)], c0, ang)
+        poly = _rot([np.array(p_) + rng.normal(0, 0.07 * ww, 2) for p_ in
+                     [(wx - ww / 2, wy), (wx + ww / 2, wy), (wx + ww / 2, wy + wh), (wx - ww / 2, wy + wh)]], c0, ang)
         parts.append(Piece(poly, "#2c3440", rng, kind="felt", t_place=t, stitch=None, margin=6, rough=0.6))
         # la ventana encendida: relleno de satín amarillo (se cose encima cuando llega la alerta)
         lit = satin_fill(inset_poly_simple(poly, 1.3 * u), np.deg2rad(8) + ang, 2.1 * u, 2.4 * u, "#f3c33a", rng)
@@ -209,25 +215,49 @@ def inset_poly_simple(poly, d):
     return c + v * np.clip((n - d) / n, 0.2, 1.0)
 
 
-def round_tree(cx, base, r, rng, t, color="#3f6b3c", u=1.0):
-    trunk = Yarn([(cx, base), (cx + rng.normal(0, 1), base - r * 1.2)], 4.5 * u, "#5b3b22", rng, fuzz=0.6)
-    crown = Piece(ellipse_poly(cx, base - r * 1.55, r, r * 0.92, wobble=0.05, rng=rng), color, rng, kind="felt",
-                  t_place=t, stitch=("#26401f", 6 * u, 5 * u, 1.5 * u), fabric_scale=u)
-    return [trunk], [crown]
+def round_tree(cx, base, r, rng, t, color=None, u=1.0):
+    """Árbol de fieltro: cada uno con su copa (más ancha o más alta, a veces de dos lóbulos) y su verde."""
+    if color is None:
+        color = str(rng.choice(["#3f6b3c", "#4b7438", "#35613f", "#56793f", "#2f5a3a"]))
+    r *= rng.uniform(0.85, 1.15)
+    trunk = Yarn([(cx, base), (cx + rng.normal(0, 1.5), base - r * 1.2)], 4.5 * u, "#5b3b22", rng, fuzz=0.6)
+    ax, ay = rng.uniform(0.85, 1.12), rng.uniform(0.8, 1.08)
+    crowns = [Piece(ellipse_poly(cx, base - r * 1.55, r * ax, r * 0.92 * ay, wobble=0.08, rng=rng,
+                                 rot=rng.normal(0, 0.15)), color, rng, kind="felt", t_place=t,
+                    stitch=("#26401f", 6 * u, 5 * u, 1.5 * u), fabric_scale=u)]
+    if rng.random() < 0.35:                         # a veces un segundo lóbulo, de otro verde
+        c2 = str(rng.choice(["#46703a", "#3a6641", "#5b8043"]))
+        crowns.append(Piece(ellipse_poly(cx + rng.choice([-1, 1]) * r * 0.55, base - r * 1.25, r * 0.62, r * 0.55,
+                                         wobble=0.08, rng=rng), c2, rng, kind="felt", t_place=t,
+                            stitch=("#26401f", 6 * u, 5 * u, 1.5 * u), fabric_scale=u))
+    return [trunk], crowns
 
 
 def araucaria(cx, base, hgt, rng, t, u=1.0):
-    """La araucaria: tronco recto y copa de «paraguas» en pisos."""
-    trunk = Yarn([(cx, base), (cx, base - hgt * 0.92)], 5.5 * u, "#4a3220", rng, fuzz=0.5)
-    tiers = []
-    for i, (fy, fw) in enumerate([(0.70, 0.62), (0.82, 0.50), (0.94, 0.34)]):
-        y = base - hgt * fy
-        wdt = hgt * fw
-        poly = [(cx - wdt / 2, y + 6 * u), (cx - wdt * 0.35, y - 9 * u), (cx, y - 14 * u), (cx + wdt * 0.35, y - 9 * u),
-                (cx + wdt / 2, y + 6 * u), (cx, y + 1 * u)]
-        tiers.append(Piece(poly, "#23452e", rng, kind="felt", t_place=t + 0.02 * i,
-                           stitch=("#132a18", 5 * u, 4 * u, 1.3 * u), fabric_scale=u))
-    return [trunk], tiers
+    """La araucaria (pehuén): tronco alto y desnudo y, arriba, la copa de paraguas: ancha, casi plana
+    encima, con las puntas de las ramas curvadas hacia arriba por debajo; bajo la copa asoman las ramas."""
+    top = base - hgt
+    trunk = Yarn([(cx, base), (cx + rng.normal(0, 1.2) * u, top + hgt * 0.2)], 5.0 * u, "#4a3220", rng, fuzz=0.5)
+    w = hgt * rng.uniform(0.66, 0.8)
+    h = hgt * rng.uniform(0.2, 0.26)
+    lean = rng.normal(0, 0.04) * w
+    upper = [(cx + lean * (1 - abs(c_)) + c_ * w / 2, top + h * 0.62 - h * 0.62 * (1 - c_ * c_) ** 0.35)
+             for c_ in np.linspace(-1, 1, 15)]
+    n_tip = int(rng.integers(5, 7))
+    lower = []
+    for k in range(n_tip * 2 + 1):                 # borde de abajo festoneado: puntas que suben
+        c_ = 1 - 2 * k / (n_tip * 2)
+        y_ = top + h * (0.62 + (0.32 if k % 2 == 0 else 0.08) * (1 - 0.35 * abs(c_)))
+        lower.append((cx + c_ * w / 2 * (0.98 if k % 2 == 0 else 0.9), y_))
+    crown = Piece(upper + lower, "#23452e", rng, kind="felt", t_place=t, stitch=("#132a18", 5 * u, 4 * u, 1.3 * u),
+                  fabric_scale=u)
+    arms = []
+    for sgn in (-1, 1):                            # dos ramas que salen del tronco hacia las puntas
+        p0 = (cx, top + h * 1.4)
+        p1 = (cx + sgn * w * 0.28, top + h * 1.05)
+        p2 = (cx + sgn * w * 0.4, top + h * 0.8)
+        arms.append(Yarn(catmull_rom(np.array([p0, p1, p2]), 6), 3.2 * u, "#3b2a1c", rng, fuzz=0.4))
+    return [trunk] + arms, [crown]
 
 
 def sun(cx, cy, r, rng, t, u=1.0):

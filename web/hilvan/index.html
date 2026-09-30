@@ -144,7 +144,7 @@
 <section class="hero" id="hero" aria-labelledby="titulo">
   <div class="hero__sticky">
     <canvas id="arpillera" role="img"
-            aria-label="Una arpillera chilena cuelga de un cordel de cáñamo: un valle de retazos con la cordillera, río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro estacas de topógrafo, un aviso prendido al cerco, una cañería con su llave de paso que sale del río y el contorno de una torre de alta tensión; al tensar el hilo, la tela se frunce. Se apaga la sala y una lámpara ilumina el revés: es un solo hilo, y detrás de la torre viene toda una línea de torres cruzando el valle. Una vecina marca cada señal con una cruz de lana roja y lleva la lana casa por casa; se encienden las ventanas y la gente apunta al cerro. Luego tira del hilván y la torre se descose puntada a puntada. La lana sube al cordel, el rojo corre hasta las arpilleras de otros territorios y enciende sus ventanas, y la aguja del comienzo borda la última letra de «Alerta» en la tira del título."></canvas>
+            aria-label="Una arpillera chilena cuelga de un cordel de cáñamo: un valle de retazos con la cordillera, río, potreros, casas y vecinas de lana. Una aguja hilvana con hilo negro estacas de topógrafo, un aviso prendido al cerco, una cañería con su llave de paso que sale del río y el contorno de una torre de alta tensión; al tensar el hilo, la tela se frunce. Se apaga la sala y una lámpara de mano recorre el revés: es un solo hilo, y detrás de la torre viene toda una línea de torres que cruza el valle y pasa sobre las casas. Una vecina calca esa ruta por delante con lana roja, con un lazo en cada torre, y la lana pasa de mano en mano mientras se encienden las ventanas. Luego tira del hilván: la torre se descose y toda la ruta escondida se frunce y se suelta, dejando solo pinchazos. La lana sube al cordel, el rojo corre hasta las arpilleras de otros territorios y enciende sus ventanas, y la aguja del comienzo borda la última letra de «Alerta» en la tira del título."></canvas>
     <ol class="stops" aria-live="polite">
       <li class="stop stop--title" data-t0="0" data-t1="1.17">
         <p class="stop__k">Guía SATC · Conocer</p>
@@ -161,18 +161,18 @@
         <p class="stop__k">Vigilar</p>
         <p>…y la torre, todavía solo un contorno. Cuando el hilo se tensa, la tela se frunce entre las casas.</p>
       </li>
-      <li class="stop" data-t0="4.62" data-t1="7.9">
+      <li class="stop" data-t0="4.62" data-t1="8.09">
         <p class="stop__k">Alertar</p>
         <p>A contraluz aparece el revés: no eran señales sueltas. <em>Es un solo hilo</em>, y detrás de la torre
-           viene toda una línea.</p>
+           viene toda una línea que pasa sobre las casas.</p>
       </li>
-      <li class="stop" data-t0="7.9" data-t1="10.2">
+      <li class="stop" data-t0="8.09" data-t1="10.2">
         <p class="stop__k">Responder</p>
-        <p>Una vecina marca cada señal con lana roja y avisa casa por casa.</p>
+        <p>Una vecina calca con lana roja la ruta escondida, torre por torre, y la lana pasa de mano en mano.</p>
       </li>
       <li class="stop" data-t0="10.2" data-t1="12.25">
         <p class="stop__k">Responder</p>
-        <p>Y el hilván se saca antes de que sea costura.</p>
+        <p>Y el hilván se saca entero, antes de que sea costura: solo quedan los pinchazos.</p>
       </li>
       <li class="stop stop--end" data-t0="12.25" data-t1="99">
         <p class="stop__k">Red Comunitaria de Alerta Energética</p>
@@ -229,9 +229,10 @@
     tall:      { dir: "frames/tall/",      w: 9,  h: 16 },
   };
   // scroll (en alturas de pantalla) -> tiempo (s): con descansos donde se lee cada parada
-  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.4, 6.25], [4.95, 7.5],
-                [5.25, 7.9], [6.5, 10.2], [7.3, 12.0], [7.5, 12.25], [8.2, 13.75], [8.8, 15.2], [9.1, 16.95]];
-  const STOPS_T = [1.17, 3.3, 4.62, 7.9, 10.2, 12.25];   // nudos del hilo de avance
+  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.3, 6.25], [5.1, 7.58],
+                [5.55, 8.09], [5.8, 8.42], [6.8, 10.2], [7.6, 12.1], [7.8, 12.25], [8.5, 13.75], [9.1, 15.2],
+                [9.4, 16.95]];
+  const STOPS_T = [1.17, 3.3, 4.62, 8.09, 10.2, 12.25];   // nudos del hilo de avance
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const hero = document.getElementById("hero");
