@@ -5,6 +5,10 @@ Comunitario* (Red Comunitaria de Alerta Energética), generada **100 % con códi
 tinta, aguadas de acuarela y gouache sobre **papel kraft**, con el lenguaje de una **lámina de guía
 de campo**. Pensada también como *hero* con efecto de scroll para la web.
 
+![Vista previa de «Cuando una ve»](output/vista_previa.gif)
+
+> Vista previa en GIF (liviana). El video en alta calidad está en
+> [`output/cuando_una_ve_1920x1080.mp4`](output/cuando_una_ve_1920x1080.mp4).
 > Concepto completo y guion: [`CONCEPTO.md`](CONCEPTO.md)
 
 ## La metáfora, en una línea
@@ -24,6 +28,7 @@ turno**, mientras las demás duermen. *Cuando una ve, todas vuelan; duermen por 
 | `output/cuando_una_ve_1080x1350.mp4` | Versión móvil 4:5 |
 | `output/*_scroll.mp4` | Mismas versiones con **todos los cuadros clave** (para controlar con `video.currentTime`) |
 | `output/poster_*.png` | Cuadro 0 (póster), cuadro del título y cuadro final, en PNG |
+| `output/vista_previa.gif` | Vista previa liviana (720 px, 15 fps) |
 | `web/index.html` | Demo del *hero* con scroll (secuencia de cuadros en `<canvas>`) |
 | `web/frames/landscape`, `web/frames/portrait` | Cuadros WebP para la demo (≈ 8 MB y 7 MB) |
 | `satc_intro/` | El código que genera todo |
