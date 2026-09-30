@@ -146,7 +146,7 @@ def burlap(W, H, seed=3, ss=2, stencil=None):
                  float(rng.uniform(0.2, 0.6)), 1, cv2.LINE_AA, shift=2)
     col = col * (1 - 0.35 * fuzz[..., None]) + lin("#d9c29a")[None, None, :] * 0.35 * fuzz[..., None]
     if stencil is not None:     # tinta en el revés: apenas sugerida a contraluz
-        trc *= (1 - 0.5 * stencil)[..., None]
+        trc *= (1 - 0.58 * stencil)[..., None]
     return np.clip(col, 0, 1).astype(np.float32), hgt.astype(np.float32), np.clip(trc, 0, 1.2).astype(np.float32)
 
 

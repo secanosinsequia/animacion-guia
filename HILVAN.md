@@ -27,24 +27,24 @@ retazos sobre sacos harineros lo que la prensa callaba y que llevaban, al revés
 carta de quien las hizo. La pieza toma esa gramática con respeto y le da su crédito (en la web, el
 llamado a leer la guía es ese bolsillo con su carta).
 
-## Guion (16,95 s, 24 fps animados «en dos»: 12 imágenes únicas por segundo, 203 en total)
+## Guion (16,85 s, 24 fps animados «en dos»: 12 imágenes únicas por segundo, 202 en total)
 
 | Tiempo | Pilar | Qué pasa |
 |---|---|---|
-| 0,0–1,2 | **Conocer** | Póster: la arpillera cuelga de un cordel de cáñamo con perritos de ropa. Un valle del centro-sur con la cordillera nevada, araucarias, río, potreros, el estanque del APR, casas y vecinas de lana. Una aguja grande, enhebrada con hilo negro, cuelga cerca de la cámara (desenfocada, con su sombra lejana en la tela) y se mece: algo está por coserse. Baja a la tela. |
-| 1,2–4,6 | **Vigilar** | Corte a un primer plano que ya no se mueve de ahí: la aguja hilvana, en orden, cuatro estacas de topógrafo con cinta naranja, un **AVISO** prendido al cerco con alfiler de gancho y una cañería con su llave de paso que sale del río. Corte al plano general: en el cerro hilvana la **torre de alta tensión, solo como contorno de puntadas largas**, a futuro. Tira del hilo: la tela se frunce a lo largo del hilo y en abanico en cada huella, y las casas de los extremos se ladean. |
-| 4,65–7,9 | **Alertar** | La sala se apaga en tres pasos. Una luz cálida cruza por detrás y enciende los agujeros en orden: cañería, aviso, estacas y, al final, la torre. Después, una lámpara de mano ilumina todo el revés y se mueve: el saco dice **HARINA · MOLINO LA ESPERANZA**, los retazos son vitrales, **un solo hilo** une las señales y detrás de la torre aparece **toda la línea proyectada**: cuatro torres más y su cable cruzando el valle sobre las casas y el río. La cámara se acerca a la constelación de la torre. Clic: se apaga la lámpara y se prende, titilando, el tubo de la sala. |
-| 7,95–12,75 | **Responder** | Una vecina marca cada señal con una **cruz de lana roja** y lleva la lana de casa en casa, cada vez más rápido: se enciende cada ventana y su gente apunta al cerro. Pausa. Corte: la vecina toma el hilván, se echa hacia atrás y tira. La torre se descose puntada a puntada hacia su ovillo, con un tironcito de la tela en cada puntada; el frunce se suelta a tirones y quedan los agujeros, por donde se ve la pared. La lana sube y se anuda al cordel. |
-| 12,25–16,95 | **Red** | La cámara se aleja por pasos, con paralaje: del cordel cuelgan otras arpilleras (un desierto con un parque solar, un campo cruzado por torres). Desde el nudo, **el rojo corre por el cordel**, baja a cada vecina y enciende su ventana; ellas se mecen al recibirlo. Abajo, la tira del título: la «a» final de «Alerta» está dibujada a lápiz. **La aguja del comienzo vuelve con la lana roja, la borda** y queda estacionada en el margen. |
+| 0,0–1,2 | **Conocer** | Póster: la arpillera cuelga de un cordel de cáñamo con perritos de ropa. Un valle del centro-sur con la cordillera nevada, araucarias, río, potreros, el estanque del APR, casas y vecinas de lana. Una aguja grande, enhebrada con hilo negro, cuelga cerca de la cámara y se mece; el foco pasa de la tela a la aguja (algo está por coserse) y la aguja baja a la tela. |
+| 1,2–4,6 | **Vigilar** | Corte a un primer plano quieto: la aguja hilvana, en orden, cuatro estacas de topógrafo con cinta naranja, un **AVISO** prendido al cerco con alfiler de gancho y una cañería con su llave de paso que sale del río. Corte al plano general: en el cerro hilvana la **torre de alta tensión, solo como contorno de puntadas largas**, a futuro. Tira del hilo: la tela se frunce a lo largo del hilo y en abanico en cada huella, y las casas de los extremos se ladean. |
+| 4,65–7,7 | **Alertar** | La sala se apaga. Una lámpara de mano, por detrás, sigue el hilo: pasa por las estacas, el aviso y la cañería (sus pinchazos se encienden), sube a la torre del cerro y baja por **una línea de torres escondida**, que solo aparece donde llega la luz, torre por torre, hasta **la casa roja**, donde se queda. Después se levanta y toda la tela es linterna: **la línea completa**, una sola vez, sobre el saco que dice **HARINA · MOLINO LA ESPERANZA**. Clic: se apaga la lámpara y el tubo de la sala titila y prende. |
+| 7,75–11,6 | **Responder** | Una vecina **calca con lana roja la ruta escondida**, con un nudo en cada torre, y la lana pasa **de mano en mano**: cada vecina y vecino la toma y se enciende su ventana. Corte: la vecina toma el hilván, se echa hacia atrás y tira; la torre del cerro se descose puntada a puntada hacia la maraña de hilo a sus pies. En el plano general, **toda la ruta escondida se frunce por delante y se suelta** desde la punta. La lámpara vuelve un instante detrás: **el revés está vacío**, solo quedan los pinchazos, con la lana roja encima. |
+| 11,7–16,85 | **Red** | La lana sube y se anuda al cordel; la cámara se aleja por pasos, con paralaje: del cordel cuelgan otras arpilleras (un desierto con un parque solar, un campo cruzado por torres). Desde el nudo, **el rojo corre por el cordel**, baja a cada vecina y enciende su ventana. **La aguja del comienzo baja desde el nudo por un hilo rojo** hasta la tira del título, borda la «a» final de «Alerta» (que estaba a lápiz) y queda en el margen: el título también es parte de la red. |
 
 ## Archivos
 
 | Archivo | Qué es |
 |---|---|
-| `output/hilvan_1920x1080.mp4` | 16:9, H.264, 16,95 s, 24 fps («en dos») |
+| `output/hilvan_1920x1080.mp4` | 16:9, H.264, 16,85 s, 24 fps («en dos») |
 | `output/hilvan_1080x1920.mp4` | 9:16 para teléfono, compuesto aparte |
 | `output/hilvan_*_scroll.mp4` | Las mismas a 12 imágenes por segundo, todas cuadro clave (para mover con `video.currentTime`) |
-| `output/hilvan_poster_*.png` | Cuadro 0, el contraluz (6,83 s) y el cuadro final, en los dos formatos |
+| `output/hilvan_poster_*.png` | Cuadro 0, el contraluz con la línea completa (7,0 s) y el cuadro final, en los dos formatos |
 | `output/hilvan_vista_previa.gif` | Vista previa liviana |
 | `web/hilvan/index.html` | La intro con scroll: 7 paradas con texto en HTML, `<h1>` real, bolsillo con la carta |
 | `web/hilvan/frames/landscape`, `tall` | Imágenes WebP de la web (16:9 y 9:16) |
@@ -58,7 +58,7 @@ pip install -r requirements.txt
 ./build_hilvan.sh          # MP4 16:9 y 9:16, versiones para scroll, WebP de la web, pósters, GIF
 ```
 
-Con 4 núcleos, cada formato tarda ≈ 3 min (203 imágenes únicas). Para probar la web:
+Con 4 núcleos, cada formato tarda ≈ 3 min (202 imágenes únicas). Para probar la web:
 `python -m http.server` en la raíz y abrir `http://localhost:8000/web/hilvan/`.
 
 ## Cómo está hecho (`hilo_rojo/`)

@@ -34,6 +34,10 @@ def n_unique():
 def render_frames(W, H, frames_dir, workers=None, only=None):
     global _SCENE
     os.makedirs(frames_dir, exist_ok=True)
+    if only is None:                 # imágenes de una versión anterior (más larga) no deben colarse al video
+        for f in os.listdir(frames_dir):
+            if f.startswith("u") and f.endswith(".png"):
+                os.remove(os.path.join(frames_dir, f))
     t0 = time.time()
     _SCENE = Scene(W, H)
     print(f"escena construida en {time.time() - t0:.1f}s", flush=True)
@@ -73,6 +77,9 @@ def encode(frames_dir, out, crf=17, all_intra=False, preset="slow", width=None, 
 def export_web_frames(frames_dir, web_dir, width, quality=74):
     """Secuencia WebP (una por imagen única) para mover con el scroll en un <canvas>."""
     os.makedirs(web_dir, exist_ok=True)
+    for f in os.listdir(web_dir):
+        if f.startswith("f") and f.endswith(".webp"):
+            os.remove(os.path.join(web_dir, f))
     names = sorted(f for f in os.listdir(frames_dir) if f.startswith("u") and f.endswith(".png"))
     total = 0
     for k, name in enumerate(names):

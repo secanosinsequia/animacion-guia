@@ -161,20 +161,20 @@
         <p class="stop__k">Vigilar</p>
         <p>…y la torre, todavía solo un contorno. Cuando el hilo se tensa, la tela se frunce entre las casas.</p>
       </li>
-      <li class="stop" data-t0="4.62" data-t1="8.09">
+      <li class="stop" data-t0="4.62" data-t1="7.5">
         <p class="stop__k">Alertar</p>
         <p>A contraluz aparece el revés: no eran señales sueltas. <em>Es un solo hilo</em>, y detrás de la torre
            viene toda una línea que pasa sobre las casas.</p>
       </li>
-      <li class="stop" data-t0="8.09" data-t1="10.2">
+      <li class="stop" data-t0="7.5" data-t1="9.6">
         <p class="stop__k">Responder</p>
         <p>Una vecina calca con lana roja la ruta escondida, torre por torre, y la lana pasa de mano en mano.</p>
       </li>
-      <li class="stop" data-t0="10.2" data-t1="12.25">
+      <li class="stop" data-t0="9.6" data-t1="11.67">
         <p class="stop__k">Responder</p>
-        <p>Y el hilván se saca entero, antes de que sea costura: solo quedan los pinchazos.</p>
+        <p>Y el hilván se saca entero, antes de que sea costura: por el revés solo quedan los pinchazos.</p>
       </li>
-      <li class="stop stop--end" data-t0="12.25" data-t1="99">
+      <li class="stop stop--end" data-t0="11.67" data-t1="99">
         <p class="stop__k">Red Comunitaria de Alerta Energética</p>
         <p>La lana roja llega al cordel del que cuelgan otros territorios: <em>una red de alerta.</em></p>
         <p><a href="#carta">Leer la carta ↓</a></p>
@@ -223,16 +223,15 @@
 (() => {
   // --- Configuración --------------------------------------------------------------------------------
   const UFPS = 12;             // imágenes únicas por segundo (stop-motion «en dos»)
-  const TOTAL = 203;           // 16,9 s
+  const TOTAL = 202;           // 16,85 s
   const SETS = {
     landscape: { dir: "frames/landscape/", w: 16, h: 9 },
     tall:      { dir: "frames/tall/",      w: 9,  h: 16 },
   };
   // scroll (en alturas de pantalla) -> tiempo (s): con descansos donde se lee cada parada
-  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.3, 6.25], [5.1, 7.58],
-                [5.55, 8.09], [5.8, 8.42], [6.8, 10.2], [7.6, 12.1], [7.8, 12.25], [8.5, 13.75], [9.1, 15.2],
-                [9.4, 16.95]];
-  const STOPS_T = [1.17, 3.3, 4.62, 8.09, 10.2, 12.25];   // nudos del hilo de avance
+  const KEYS = [[0, 0], [0.6, 1.17], [2.3, 3.3], [2.8, 4.0], [3.2, 4.62], [3.45, 4.9], [4.75, 6.58], [5.35, 7.34],
+                [5.5, 7.67], [6.4, 9.08], [7.3, 11.0], [7.7, 11.59], [8.4, 13.17], [8.95, 14.57], [9.3, 15.9], [9.5, 16.85]];
+  const STOPS_T = [1.17, 3.3, 4.62, 7.5, 9.6, 11.67];   // nudos del hilo de avance
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const hero = document.getElementById("hero");

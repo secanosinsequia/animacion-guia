@@ -345,7 +345,7 @@ def knot(center, rad, color, rng):
     return Sprite(x0, y0, rgb.astype(np.float32), a, sh)
 
 
-def running_stitch(path, stitch, gap, w, color, rng, jitter=0.6, kind="floss", closed=False):
+def running_stitch(path, stitch, gap, w, color, rng, jitter=0.6, kind="floss", closed=False, wvar=0.12):
     """Puntada corrida (hilván) a lo largo de un camino: lista de (largo_en_camino, sprite)."""
     pts = np.asarray(path, np.float64)
     if closed:
@@ -364,7 +364,7 @@ def running_stitch(path, stitch, gap, w, color, rng, jitter=0.6, kind="floss", c
         b = min(b, len(pts) - 1)
         p0 = pts[a] + rng.normal(0, jitter * 1.6, 2)
         p1 = pts[b] + rng.normal(0, jitter * 1.6, 2)
-        out.append((s, Stitch.render(p0, p1, w * rng.uniform(0.88, 1.12), color, rng, kind=kind)))
+        out.append((s, Stitch.render(p0, p1, w * rng.uniform(1 - wvar, 1 + wvar), color, rng, kind=kind)))
         s += stitch + gap * rng.uniform(0.65, 1.4)
     if gap < 1.5 and arc[-1] - s > stitch * 0.3:      # el pespunte llega al final (la o cierra)
         a = int(np.searchsorted(arc, s))
@@ -372,9 +372,9 @@ def running_stitch(path, stitch, gap, w, color, rng, jitter=0.6, kind="floss", c
     return out
 
 
-def backstitch(path, stitch, w, color, rng, jitter=0.35, kind="floss"):
-    """Pespunte: puntadas seguidas (para letras bordadas)."""
-    return running_stitch(path, stitch, 0.9, w, color, rng, jitter=jitter, kind=kind)
+def backstitch(path, stitch, w, color, rng, jitter=0.35, kind="floss", wvar=0.12):
+    """Pespunte: puntadas seguidas (para letras bordadas). wvar: cuánto varía el grosor de una a otra."""
+    return running_stitch(path, stitch, 0.9, w, color, rng, jitter=jitter, kind=kind, wvar=wvar)
 
 
 def satin_fill(poly, angle, spacing, w, color, rng):

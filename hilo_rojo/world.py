@@ -270,6 +270,26 @@ class World:
             gr = rg.standard_normal((H, W)).astype(np.float32)
             gr = cv2.GaussianBlur(gr, (0, 0), 0.7 * self.u)
             self.grain.append(gr / (gr.std() + 1e-6))
+        # control: en el plano general del comienzo (póster) la tira del título no asoma ni un píxel
+        vis = self._title_visible(self.camera(0.0))
+        if vis > 0.004:
+            raise ValueError(f"la tira del título asoma en el plano general (alfa máx. {vis:.3f}): bajarla")
+
+    def _title_visible(self, cam):
+        """Cuánto se ve de la tira del título (y sus tachuelas y su sombra) dentro del cuadro con esta cámara."""
+        W, H = self.W, self.H
+        zs = cam["zs"]
+        c = np.asarray(cam["c"], np.float64)
+        Ms = np.float32([[zs / 2, 0, W / 2 - c[0] * zs], [0, zs / 2, H / 2 - c[1] * zs]])
+        acc = np.zeros((H, W), np.float32)
+        for sp in self.title:
+            for a_ in (sp.a,) + ((sp.sh,) if sp.sh is not None else ()):
+                h, w = a_.shape
+                M = Ms.copy()
+                M[0, 2] = Ms[0, 2] + Ms[0, 0] * sp.x0
+                M[1, 2] = Ms[1, 2] + Ms[1, 1] * sp.y0
+                acc = np.maximum(acc, cv2.warpAffine(a_.astype(np.float32), M, (W, H), flags=cv2.INTER_LINEAR))
+        return float(acc.max())
 
     # ------------------------------------------------------------------------------------------------
     # cámara: se mueve por pasos desparejos, como en un rodaje cuadro a cuadro
@@ -366,7 +386,9 @@ class World:
         dark = spec.get("color", "#2b211b")
         # medir todas las líneas y achicar lo necesario para que quepan dentro de la tira (con margen)
         inner = (x1 - x0) * 0.88
-        fnt = lambda kind: "futural" if kind == "small" else font
+        font_small, font_wool = spec.get("font_small", "futural"), spec.get("font_wool", font)
+        fnt = lambda kind: font_small if kind == "small" else (font_wool if kind == "wool" else font)
+        hand = float(spec.get("hand", 0.0))                # pulso de mano: los trazos no son de regla
 
         def trace(words, cap, base, k=1.0):
             ws = [(*hershey_strokes_es(txt, fnt(kind), cap * 2 * k, 0, base * 2, anchor="left", ref="H"), kind)
@@ -406,6 +428,8 @@ class World:
                 for i_s, st in enumerate(sts):
                     R_, c_, dy_ = gtf[gid[i_s]]
                     st = (st - c_) @ R_.T + c_ + np.array([0, dy_])
+                    if hand > 0 and len(st) >= 2:
+                        st = _hand_wobble(st, hand * cap * 2 * fit, rng)
                     if kind == "wool":
                         if len(st) < 2:
                             continue
@@ -437,10 +461,10 @@ class World:
                             a_, b_ = (a_ + b_) / 2 - d_ * 1.5 * u2, (a_ + b_) / 2 + d_ * 1.5 * u2
                         items.append(Stitch.render(a_, b_, (2.0 if kind == "small" else 2.6) * u2, col_, rng))
                     elif kind == "small":
-                        for _, sp in backstitch(st, 3.4 * u2, 2.3 * u2, col_, rng, jitter=0.08):
+                        for _, sp in backstitch(st, 3.4 * u2, 2.3 * u2, col_, rng, jitter=0.1, wvar=0.3):
                             items.append(sp)
                     else:
-                        for _, sp in backstitch(st, 6.2 * u2, 2.5 * u2, dark, rng, jitter=0.2):
+                        for _, sp in backstitch(st, 6.2 * u2, 2.5 * u2, dark, rng, jitter=0.2, wvar=0.25):
                             items.append(sp)
                 x += w + space
                 word_id += 1
@@ -748,7 +772,7 @@ class World:
         w = needle_w * self.main.s * z * m
         lift = 0.9 + 3.6 * near
         rf = float(dg.get("focus", 0.0))
-        sig = 2.8 * near * (1 - rf) * self.u * z / 1.8
+        sig = 1.5 * near * (1 - rf) * self.u * z / 1.8           # semienfocada desde el primer cuadro
         if rf > 0.01:                                     # el foco se va a la aguja: la tela se ablanda
             out[:] = cv2.GaussianBlur(out, (0, 0), 2.6 * rf * self.u)
         # el hilo, desde fuera del cuadro, pasa por el ojo; un cabo corto cuelga del otro lado
@@ -778,7 +802,25 @@ class World:
         for ch in tail.chunks:
             composite(out, _blur_sprite(Sprite(ch.x0, ch.y0, ch.rgb, ch.a, None), sig), 0.0)
 
-    def _end_stitch(self, out, tq, win, cam, k):
+    def _red_link(self, P, head, u_):
+        """El camino de la lana que une la etiqueta con la red: nace en el nudo del cordel (donde se anudó la
+        lana de la arpillera), baja por el hueco entre las telas y llega, por encima de la tira, a la «a»."""
+        if self.knot_x is None:
+            return None
+        xk = float(self.knot_x)
+        yk = float(np.interp(xk, self.line_pts[:, 0], self.line_pts[:, 1]))
+        kn = np.array([xk, yk]) @ P[:, :2].T + P[:, 2]
+        cw = self.main.corners_world() @ P[:, :2].T + P[:, 2]
+        right = float(np.max(cw[:, 0]))
+        bottom = float(np.max(cw[:, 1]))
+        gx = right + 16 * u_
+        p1 = np.array([gx, kn[1] + 40 * u_])
+        p2 = np.array([gx - 4 * u_, bottom + 34 * u_])
+        p3 = np.array([head[0] + 20 * u_, head[1] - 70 * u_])
+        return catmull_rom(np.array([kn, p1, (p1 + p2) / 2 + np.array([5 * u_, 0]), p2,
+                                     (p2 + p3) / 2 + np.array([0, 16 * u_]), p3, head]), 14)
+
+    def _end_stitch(self, out, tq, win, cam, k, P=None):
         """La aguja del principio vuelve, ahora con la lana roja, y borda sobre el trazo a lápiz la última
         letra de «Alerta»; después pasa al revés de la tira y queda estacionada en el margen, clavada como en
         un costurero, con su cabo colgando (cierra el círculo con el primer cuadro). La hebra de trabajo es
@@ -789,11 +831,26 @@ class World:
         pts = [S(st) for st in self.title_tail]
         L = [float(np.sum(np.linalg.norm(np.diff(p_, axis=0), axis=1))) for p_ in pts]
         tot = sum(L)
-        t_in = a + 0.25                                   # entra desde arriba a la izquierda en tres imágenes
+        t_in = a + 4 / 12                                 # baja por su hebra desde el cordel en cuatro imágenes
         f = float(np.clip((tq - t_in) / (b - t_in), 0, 1))
         done = f * tot
         w = self.title_tail_w * Ms[0, 0]
         rng = np.random.default_rng(55)
+        u_ = self.u * cam["zs"]
+        # la hebra roja que une la etiqueta con el nudo de la red, en el cordel (el título es parte de la red)
+        link = self._red_link(P, pts[0][0], u_) if P is not None else None
+        link_upto = None
+        if link is not None:
+            arc_l = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(link, axis=0), axis=1))])
+            if tq < t_in:
+                i_ = int(np.floor((tq - a) * 12 + 1e-6))
+                link_upto = arc_l[-1] * (i_ + 1) / 4.5
+                seg_ = link[arc_l <= link_upto]
+            else:
+                seg_ = link
+            if len(seg_) >= 2:
+                for ch in Yarn(seg_, w * 0.9, WOOL, np.random.default_rng(56), fuzz=0.6).chunks:
+                    composite(out, ch, 0.35)
         head, head_d = None, np.array([1.0, 0.0])
         for p_, l_ in zip(pts, L):
             if done <= 0:
@@ -809,7 +866,6 @@ class World:
         if head is None:
             head = pts[0][0]
         kk = int(round(tq * 12))
-        u_ = self.u * cam["zs"]
         Ln, wn = 150 * u_, 5.4 * u_
         th = -np.deg2rad(58 + (kk % 3) * 3)              # el ojo arriba a la derecha: tapa lo menos posible
         v = np.array([np.cos(th), np.sin(th)])
@@ -845,9 +901,19 @@ class World:
                     composite(out, ch, 0.35)
             composite(out, nd, 0.6)
             return
-        if tq < t_in:                  # entra por la pared, entre la arpillera y la tira, sin pasar sobre el texto
+        if tq < t_in and link is not None:            # baja por su hebra, desde el nudo del cordel
+            j_ = int(np.searchsorted(arc_l, link_upto))
+            j_ = int(np.clip(j_, 1, len(link) - 1))
+            tip = link[j_]
+            d_ = _unit2(link[j_] - link[max(0, j_ - 3)])
+            eye = tip - d_ * Ln                            # el ojo va detrás de la punta
+            inside = False
+            nd = needle_sprite(eye, tip, wn, lift=0.9)
+            composite(out, nd, 0.6)
+            return
+        if tq < t_in:                  # (sin cordel a la vista: entra por la pared, entre la arpillera y la tira)
             i_ = int(np.floor((tq - a) * 12 + 1e-6))
-            g = (i_ + 1) / 3.5
+            g = (i_ + 1) / 4.5
             rect = self.L["title"]["rect"]
             sl = S(np.array([2 * rect[0], 2 * rect[1]]))
             start = np.array([sl[0] - 260 * u_, sl[1] - 40 * u_])
@@ -1087,7 +1153,7 @@ class World:
         if dangle is not None:
             self._needle_fg(out, dangle, P, z, amF, needle_w)
         if T.get("end_stitch") and tq >= T["end_stitch"][0] and getattr(self, "title_tail", None):
-            self._end_stitch(out, tq, T["end_stitch"], cam, k)
+            self._end_stitch(out, tq, T["end_stitch"], cam, k, P)
         zr = z / float(self.L["z0"])
         if zr > 1.15:
             yf = H / 2
@@ -1128,6 +1194,26 @@ class World:
             out = cv2.warpAffine(out, np.float32([[1, 0, jx], [0, 1, jy]]), (W, H), flags=cv2.INTER_LINEAR,
                                  borderMode=cv2.BORDER_REFLECT)
         return np.clip(out, 0, 1)
+
+
+def _hand_wobble(st, amp, rng):
+    """Un trazo hecho a pulso: se remuestrea y se ondula suavemente (dos ondas largas al azar), sin
+    mover sus extremos más de lo que se mueve el resto."""
+    st = np.asarray(st, np.float64)
+    seg = np.linalg.norm(np.diff(st, axis=0), axis=1)
+    L = float(seg.sum())
+    if L < 1e-6:
+        return st
+    n = max(2, int(L / 2.0) + 1)
+    s_ = np.concatenate([[0], np.cumsum(seg)])
+    t = np.linspace(0, L, n)
+    pts = np.stack([np.interp(t, s_, st[:, 0]), np.interp(t, s_, st[:, 1])], 1)
+    k1, k2 = rng.uniform(0.6, 1.6), rng.uniform(1.8, 3.5)
+    p1, p2 = rng.uniform(0, 2 * np.pi, 2), rng.uniform(0, 2 * np.pi, 2)
+    ph = t / max(L, 1e-6) * 2 * np.pi
+    off = np.stack([np.sin(k1 * ph + p1[0]) + 0.5 * np.sin(k2 * ph + p2[0]),
+                    np.sin(k1 * ph + p1[1]) + 0.5 * np.sin(k2 * ph + p2[1])], 1) * amp * min(1.0, L / (8 * amp + 1e-6))
+    return pts + off
 
 
 def _glyph_groups(strokes, tol):
