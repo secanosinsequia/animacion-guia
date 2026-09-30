@@ -129,7 +129,7 @@ def build(W, H, seed=11):
     canvas = col.copy()
     T0 = T.copy()
     from .thread import composite_T_piece
-    composite_T_piece.blur = cv2.GaussianBlur(T0, (0, 0), 2.4 * u)
+    composite_T_piece.blur = cv2.GaussianBlur(T0, (0, 0), 4.6 * u)
     C = np.zeros((H, W), np.float32)
     info = {"layout": Lz, "portrait": portrait}
 

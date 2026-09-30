@@ -109,7 +109,8 @@ class Piece:
         composite(canvas, self.sprite, shadow=self.shadow_k)
         from .thread import composite_T, composite_T_piece
         if T0 is not None and C is not None:
-            crisp = dict(felt=0.2, cord=0.35, flannel=0.45, satin=0.5).get(self.kind, 0.7)
+            # la tela difunde la luz: la trama del saco apenas se adivina a través de ella
+            crisp = dict(felt=0.05, cord=0.12, flannel=0.15, satin=0.3).get(self.kind, 0.28)
             composite_T_piece(T, T0, C, self.sprite, crisp=crisp)
         else:
             composite_T(T, self.sprite)

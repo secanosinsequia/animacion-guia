@@ -342,10 +342,11 @@
     for (const [tk, el] of knots) el.classList.toggle("is-past", t >= tk);
   }
 
-  // en reposo (arriba del todo) solo se mueve el humo de la chimenea: imágenes 0–11 en bucle
+  // en reposo (arriba del todo) la aguja se mece y sale el humo: imágenes 0–6 en ida y vuelta
+  // (antes del cambio de foco)
   function idleLoop(t0) {
     const step = (now) => {
-      if (idle) { const i = Math.floor(((now - t0) / 1000) * UFPS) % 20; draw(i <= 10 ? i : 20 - i); }
+      if (idle) { const i = Math.floor(((now - t0) / 1000) * UFPS) % 12; draw(i <= 6 ? i : 12 - i); }
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);

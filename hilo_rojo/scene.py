@@ -35,9 +35,9 @@ UFPS = 12
 DURATION = 16.95
 
 T = dict(hook=(0.92, 1.17), stakes=(1.17, 1.8), notice=(1.85, 2.4), intake=(2.45, 2.98), pylon=(3.3, 3.95),
-         taut=(4.0, 4.6), dim=(4.65, 4.9), sweep=(4.9, 6.25), full=(6.25, 7.5), curtain=(7.5, 7.92),
-         marks=(7.95, 8.42), wool=(8.42, 9.85), pull=(10.7, 12.1), rise=(12.25, 12.75), dolly=(12.25, 13.75),
-         front=(13.85, 15.15), end_stitch=(15.2, 16.25))
+         taut=(4.0, 4.6), dim=(4.65, 4.9), sweep=(4.9, 6.25), full=(6.25, 8.09), curtain=(8.09, 8.34),
+         trace=(8.42, 9.25), wool=(9.25, 9.92), pull=(10.6, 12.15), unstitch=(10.8, 11.35), route=(11.42, 12.1),
+         rise=(12.25, 12.75), dolly=(12.25, 13.75), front=(13.85, 15.15), end_stitch=(15.2, 16.25))
 BLK = "#141516"
 WOOL = "#c3241c"
 
@@ -77,6 +77,48 @@ def _crossings(pts):
     return n
 
 
+def _ball_sprite(c, r, u, seed):
+    """Un ovillo de hilo negro: una bola con luz y sombra, y las vueltas del hilo a la vista (círculos
+    máximos en distintas direcciones; solo la mitad de adelante de cada vuelta)."""
+    from .thread import LIGHT
+    rng = np.random.default_rng(seed)
+    pad = 4
+    n = int(2 * r + 2 * pad) + 1
+    x0, y0 = int(c[0] - r - pad), int(c[1] - r - pad)
+    yy, xx = np.mgrid[y0:y0 + n, x0:x0 + n].astype(np.float32) + 0.5
+    dx, dy = (xx - c[0]) / r, (yy - c[1]) / r
+    rr = np.sqrt(dx * dx + dy * dy)
+    a = np.clip((1 - rr) * r + 0.5, 0, 1).astype(np.float32)
+    nz = np.sqrt(np.clip(1 - rr * rr, 0, 1))
+    lam = np.clip(dx * LIGHT[0] + dy * LIGHT[1] + nz * LIGHT[2], 0, 1)
+    base = lin(BLK)
+    val = (0.45 + 0.9 * lam) * (0.8 + 0.2 * nz)
+    rgb = base[None, None, :] * val[..., None]
+    # las vueltas: hebras un poco más claras (brillo del hilo) que dan la forma de bola
+    strands = np.zeros((n, n), np.float32)
+    for _ in range(int(10 + r / (2.2 * u))):
+        ax = rng.normal(0, 1, 3)
+        ax /= np.linalg.norm(ax) + 1e-9
+        e1 = np.cross(ax, [0.3, 0.9, 0.1])
+        e1 /= np.linalg.norm(e1) + 1e-9
+        e2 = np.cross(ax, e1)
+        t = np.linspace(0, 2 * np.pi, 90)
+        P = np.outer(np.cos(t), e1) + np.outer(np.sin(t), e2)
+        vis = P[:, 2] > 0.05
+        pts = np.stack([c[0] - x0 + P[:, 0] * r * 0.97, c[1] - y0 + P[:, 1] * r * 0.97], 1)
+        for k in range(len(t) - 1):
+            if vis[k] and vis[k + 1]:
+                cv2.line(strands, (int(pts[k, 0] * 4), int(pts[k, 1] * 4)),
+                         (int(pts[k + 1, 0] * 4), int(pts[k + 1, 1] * 4)), float(rng.uniform(0.5, 1.0)),
+                         max(1, int(1.2 * u * 4 / 4)), cv2.LINE_AA, shift=2)
+    strands = cv2.GaussianBlur(strands, (0, 0), 0.5)
+    rgb = rgb * (1 - 0.35 * strands[..., None]) + lin("#5a5c60")[None, None, :] * (0.35 * strands * lam)[..., None]
+    rgb = rgb * (1 - 0.5 * np.clip(rr - 0.8, 0, 1) / 0.2)[..., None]      # el borde se va a la sombra
+    sh = cv2.GaussianBlur(a, (0, 0), max(1.0, r * 0.25))
+    sh = cv2.warpAffine(sh, np.float32([[1, 0, r * 0.25], [0, 1, r * 0.3]]), (n, n))
+    return Sprite(x0, y0, (rgb * a[..., None]).astype(np.float32), a, sh)
+
+
 class Scene:
     def __init__(self, W=1920, H=1080, seed=11, ss=1.5):
         # la tela se cose (se calcula) a más resolución que el cuadro: así la cámara puede acercarse
@@ -106,7 +148,20 @@ class Scene:
         self.back_mask = self._back_mask(rng)
         self.pinholes = self._pinholes()
         # ---------------------------------------------------------------- el frunce
-        self._pucker_prepare([(self.H2, self.H3), (self.H3, self.H4)], [self.H2, self.H3, self.H4])
+        self.pk = self._pucker_prepare([(self.H2, self.H3), (self.H3, self.H4)], [self.H2, self.H3, self.H4])
+        # la ruta escondida (la línea de torres del revés): al tirar del hilván se frunce por delante a lo largo
+        # de toda la ruta y se suelta desde la punta lejana, dejando pinchazos donde estaba cada torre
+        self.route = [np.asarray(self.pylon_top, np.float64) + (0, 120 * u)] + \
+                     [np.asarray(b_, np.float64) - (0, 95 * u) for b_ in info["back_line"]]
+        pr = self._pucker_prepare(list(zip(self.route[:-1], self.route[1:])), self.route[1:], gather_k=0.12,
+                                  tug_k=0.45, arc=True, seed=8)
+        pr.pop("xx")
+        pr.pop("yy")
+        self.pk_route = pr
+        self.route_arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(np.array(self.route), axis=0),
+                                                                          axis=1))])
+        self.route_holes = self._route_holes()
+        self.lamp_plan = self._lamp_plan()
         # ---------------------------------------------------------------- vecinas y vecinos, y la lana roja
         self._dolls_prepare()
         self._wool_prepare(rng)
@@ -124,6 +179,39 @@ class Scene:
         self.world = World(self.OW, self.OH, self.layout)
 
     # ------------------------------------------------------------------------------------------------
+    def _lamp_plan(self):
+        """La lámpara de mano, imagen por imagen: se detiene en la torre del cerro y en cada torre escondida
+        (más tiempo en la última, sobre la casa roja), saltando de una a otra; al final se abre (None)."""
+        R = 0.115 * max(self.W, self.H)
+        stops = [np.asarray(p_, np.float64) for p_ in self.route]
+        plan = []
+        for j, p_ in enumerate(stops):
+            if j > 0:
+                plan.append(((stops[j - 1] + p_) / 2 + np.array([0.0, -30 * self.u]), R * 1.25))   # la mueve
+            rj = np.random.default_rng(40 + j)
+            for _ in range(2 if j < len(stops) - 1 else 4):
+                plan.append((p_ + rj.normal(0, 6 * self.u, 2), R))                          # pulso de mano
+        n = int(round((T["full"][1] - T["full"][0]) * UFPS))
+        plan += [None] * max(0, n - len(plan))
+        return plan
+
+    def _route_holes(self):
+        """Los pinchazos que deja cada torre escondida cuando sale su hilo: (largo en la ruta, [sprites]).
+        (La misma geometría con que se dibujan en el revés.)"""
+        u = self.u
+        hgt = 200 * u
+        out = []
+        for i, base in enumerate(self.info["back_line"]):
+            bx, by = float(base[0]), float(base[1])
+            wb, wt = hgt * 0.24, hgt * 0.07
+            waist = by - hgt * 0.72
+            pts = [(bx - wb / 2, by), (bx + wb / 2, by), (bx - wt / 2, waist), (bx + wt / 2, waist), (bx, by - hgt),
+                   (bx - hgt * 0.3, by - hgt * 0.8), (bx + hgt * 0.3, by - hgt * 0.8)]
+            sps = [self._hole(np.array(p_), np.random.default_rng(int(p_[0] * 7 + p_[1] * 3)), faint=True,
+                              R=3.0 * u) for p_ in pts]
+            out.append((float(self.route_arc[i + 1]), sps))
+        return out
+
     def _tower_hole_pts(self):
         pts = []
         for i in self.tower_idx:
@@ -132,10 +220,10 @@ class Scene:
                     pts.append(p)
         return pts
 
-    def _hole(self, p, rng, faint=False):
+    def _hole(self, p, rng, faint=False, R=None):
         """Agujero que deja una puntada al sacarla. faint: apenas una marca (memoria, no mancha)."""
         u = self.u
-        R = 2.2 * u
+        R = 2.2 * u if R is None else R
         x0, y0 = int(p[0] - 8 * u), int(p[1] - 8 * u)
         n = int(16 * u) + 2
         yy, xx = np.mgrid[y0:y0 + n, x0:x0 + n].astype(np.float32) + 0.5
@@ -196,12 +284,12 @@ class Scene:
                     ((bx - wb / 2, by), (bx + wb * 0.2, by - hgt * 0.36)), ((bx + wb / 2, by), (bx - wb * 0.2, by - hgt * 0.36)),
                     ((bx - hgt * 0.3, by - hgt * 0.8), (bx + hgt * 0.3, by - hgt * 0.8))]
             for (p0, p1) in legs:
-                stroke(np.array([p0, p1]), 2.7 * u, farness=0.25)
+                stroke(np.array([p0, p1]), 4.0 * u, farness=0.0)
             tops.append(top)
             arms.append((np.array([bx - hgt * 0.3, by - hgt * 0.8]), np.array([bx + hgt * 0.3, by - hgt * 0.8])))
         for (a0, a1), (b0, b1) in zip(arms[:-1], arms[1:]):
             for pa, pb in ((a0, b0), (a1, b1)):
-                stroke(sag(pa, pb, 0.05), 2.0 * u, rr=0.25)
+                stroke(sag(pa, pb, 0.05), 3.0 * u, rr=0.25, farness=0.1)
         core = cv2.GaussianBlur(np.clip(core, 0, 1), (0, 0), 0.6 * u)
         halo = cv2.GaussianBlur(np.clip(loose, 0, 1), (0, 0), 3.2 * u)
         self.back_core, self.back_halo = np.clip(core * 1.25, 0, 1), np.clip(halo * 0.6, 0, 1)
@@ -229,16 +317,21 @@ class Scene:
         return self.pin_var[0]
 
     # ------------------------------------------------------------------------------------------------
-    def _pucker_prepare(self, segs, pins):
+    def _pucker_prepare(self, segs, pins, gather_k=0.2, tug_k=1.0, arc=False, seed=3):
         """Frunce: pliegues perpendiculares al hilo que arrastran la tela (y su estampado), pliegues que
-        irradian de cada huella, un tirón que acerca y ladea lo de los extremos y el ruedo que sube."""
+        irradian de cada huella, un tirón que acerca y ladea lo de los extremos y el ruedo que sube.
+        Devuelve los campos; con arc, también a qué altura del hilo (largo desde el primer punto) está cada
+        píxel, para soltar el frunce de a tramos."""
         u, W, H = self.u, self.W, self.H
         yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
         DX = np.zeros_like(xx)
         DY = np.zeros_like(xx)
         S = np.zeros_like(xx)
         TM = np.zeros_like(xx)
-        rngp = np.random.default_rng(3)
+        ARC = np.zeros_like(xx) if arc else None
+        GM = np.zeros_like(xx) if arc else None
+        arc0 = 0.0
+        rngp = np.random.default_rng(seed)
         lam = 23 * u
         for (a, b) in segs:
             a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
@@ -255,9 +348,15 @@ class Scene:
                  * smoothstep(L + 26 * u, L - 34 * u, s_))
             beyond = np.maximum(np.maximum(-s_, s_ - L), 0)
             side = np.clip((s_ - L / 2) / (L / 2), -1, 1)
-            tug = np.exp(-(e / (240 * u)) ** 2) * np.exp(-beyond / (380 * u)) * side
+            tug = np.exp(-(e / (240 * u)) ** 2) * np.exp(-beyond / (380 * u)) * side * tug_k
             ph = 2 * np.pi * s_ / (lam * (1 + 0.45 * wob2)) + wob * 3.2 + e / (60 * u) * 0.9
-            gather = 0.2 * L
+            gather = gather_k * L
+            if arc:                                       # el tramo que más pesa en cada píxel da su altura
+                wgt = np.maximum(g, 0.3 * np.abs(tug))
+                sel = wgt > GM
+                ARC[sel] = (arc0 + np.clip(s_, 0, L))[sel]
+                GM[sel] = wgt[sel]
+                arc0 += L
             # el estampado se arrastra de verdad: compresión en los pliegues y ondulación lateral
             ds = (g * 0.2 * (np.clip(s_, 0, L) - L / 2) + gather / 2 * tug * (1 - g)
                   + g * 1.05 * lam / (2 * np.pi) * np.sin(ph))
@@ -293,21 +392,28 @@ class Scene:
         edge = 30 * u
         win = (0.35 + 0.65 * smoothstep(0, edge, xx) * smoothstep(0, edge, W - xx) * smoothstep(0, edge, yy)
                * smoothstep(0, edge, H - yy)).astype(np.float32)
-        self.pk = dict(xx=xx, yy=yy, DX=DX * win, DY=DY * win, S=S * win, TM=np.clip(TM, 0, 1) * win)
+        return dict(xx=xx, yy=yy, DX=DX * win, DY=DY * win, S=S * win, TM=np.clip(TM, 0, 1) * win, ARC=ARC,
+                    L=arc0)
 
-    def _pucker(self, img, Tm, A, alpha=None):
-        """Aplica el frunce con intensidad A (0..1); también a la silueta de la tela (alpha)."""
-        if A <= 0.001:
+    def _pucker(self, img, Tm, A, alpha=None, A2=0.0, front=None):
+        """Aplica el frunce con intensidad A (0..1); también a la silueta de la tela (alpha). A2: el frunce
+        de la ruta escondida, que ya se soltó más allá de `front` (largo a lo largo de la ruta)."""
+        if A <= 0.001 and A2 <= 0.001:
             return img, Tm, alpha
         pk = self.pk
-        mx = (pk["xx"] + A * pk["DX"]).astype(np.float32)
-        my = (pk["yy"] + A * pk["DY"]).astype(np.float32)
+        DX, DY, S, TM = A * pk["DX"], A * pk["DY"], A * pk["S"], A * pk["TM"]
+        if A2 > 0.001:
+            pr = self.pk_route
+            w = A2 if front is None else A2 * np.clip((front - pr["ARC"]) / (40 * self.u), 0, 1)
+            DX, DY, S, TM = DX + w * pr["DX"], DY + w * pr["DY"], S + w * pr["S"], TM + w * pr["TM"]
+        mx = (pk["xx"] + DX).astype(np.float32)
+        my = (pk["yy"] + DY).astype(np.float32)
         img = cv2.remap(img, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
         Tm = cv2.remap(Tm, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
         if alpha is not None:
             alpha = cv2.remap(alpha, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-        img *= np.clip(1 + A * pk["S"], 0.55, 1.45)[..., None]
-        Tm *= (1 - 0.55 * A * pk["TM"])[..., None]
+        img *= np.clip(1 + S, 0.55, 1.45)[..., None]
+        Tm *= (1 - 0.55 * np.clip(TM, 0, 1))[..., None]
         return img, Tm, alpha
 
     # ------------------------------------------------------------------------------------------------
@@ -318,10 +424,10 @@ class Scene:
         mk_spec = lambda sp, **kw: doll(sp["fx"], sp["base"], sp["hgt"], np.random.default_rng(1), 0,
                                         dress=sp["dress"], dress_kind=sp["dress_kind"], dress2=sp["dress2"],
                                         skin=sp["skin"], hair=sp["hair"], u=sp["u"], kind=sp["kind"], **kw)
+        self._mk_spec = mk_spec
         for i, sp in enumerate(self.info["dolls"]):
             near = int(np.argmin([np.hypot(sp["fx"] - c[0], sp["base"] - c[1]) for c in houses]))
-            d = dict(spec=sp, house=near, rest=doll_layer(mk_spec(sp, arms=sp["arms"])),
-                     point=doll_layer(mk_spec(sp, arms="point", target=self.H1 - (0, 120 * self.u))))
+            d = dict(spec=sp, house=near, rest=doll_layer(mk_spec(sp, arms=sp["arms"])))
             self.dolls.append(d)
         k = int(np.argmin([np.hypot(d["spec"]["fx"] - self.first_stitch[0], d["spec"]["base"] - self.first_stitch[1])
                            for d in self.dolls]))
@@ -329,9 +435,9 @@ class Scene:
         sp = self.dolls[k]["spec"]
         h = sp["hgt"] * (0.74 if sp["kind"] == "child" else 1.0)
         neck = sp["base"] - h * 0.68
-        # sostiene la lana: mano estirada hacia las estacas
-        side = 1.0 if self.first_stitch[0] >= sp["fx"] else -1.0
-        self.hold_hand = np.array([sp["fx"] + side * h * 0.32, neck + h * 0.12])
+        # sostiene la lana: mano estirada hacia la torre del cerro (por donde empieza a calcar la ruta)
+        side = 1.0 if self.H1[0] >= sp["fx"] else -1.0
+        self.hold_hand = np.array([sp["fx"] + side * h * 0.32, neck + h * 0.06])
         other = np.array([sp["fx"] - side * h * 0.27, neck + h * 0.26])
         hands = (other, self.hold_hand) if side > 0 else (self.hold_hand, other)
         self.dolls[k]["hold"] = doll_layer(mk_spec(sp, hands=hands))
@@ -346,48 +452,65 @@ class Scene:
     def _draw_dolls(self, img, tq, Tm=None):
         lit_t = self.house_times
         p0, p1 = T["pull"]
-        w0, w1 = T["wool"]
         for i, d in enumerate(self.dolls):
             lay = d["rest"]
             if i == self.vigia:
-                if T["marks"][0] <= tq < p0:
+                if T["trace"][0] <= tq < p0:
                     lay = d["hold"]
                 elif p0 <= tq < p1:
                     kk = int(round((tq - p0) * UFPS))
                     lay = d["pull"][0] if kk < 3 else d["pull"][(1, 2, 2, 1)[kk % 4]]   # se afirma, y tira
             else:
                 tl = lit_t.get(d["house"])
-                if tl is not None and tq >= tl:
-                    lay = d["point"]
+                if tl is not None and tq >= tl - 1e-6 and "take" in d:
+                    lay = d["take"]                          # toma la lana y la pasa: queda en su mano
             composite(img, lay, shadow=0.5)
             if Tm is not None:
                 composite_T(Tm, lay)
 
     # ------------------------------------------------------------------------------------------------
     def _wool_prepare(self, rng):
-        """La vigía responde: primero marca cada señal con una cruz de lana roja (el aviso, las estacas, la
-        cañería); después lleva la lana de su mano a cada casa (roja, azul, blanca), cada vez más rápido, y
-        al final la lana sube por el borde derecho hacia el cordel."""
+        """La vigía responde con lana roja. Primero calca por delante la ruta escondida —de su mano a la torre
+        del cerro y, torre por torre (un nudo rojo en cada una), hasta la casa roja—: lo que estaba oculto
+        queda a la vista de todos. Después la lana pasa de mano en mano (roja, azul, blanca): cada vecina y
+        vecino la toma y se enciende su ventana. Al final sube por el borde derecho hacia el cordel."""
         u, W, H = self.u, self.W, self.H
         hs = self.info["houses"]
         doors = [np.asarray(h["door"]) for h in hs]
-        stakes = self.info["stakes"]
         own, order = 2, [0, 1, 3]                             # amarilla (la de la vigía); roja, azul, blanca
-        # cruces rojas sobre las señales
-        m0, m1 = T["marks"]
-        spots = [self.notice_c + (26 * u, 20 * u), np.mean(np.array(stakes), axis=0) + (0, 26 * u),
-                 self.H4 + (-50 * u, 6 * u)]
-        self.marks = []
-        for j, c in enumerate(spots):
-            c = np.asarray(c, np.float64)
-            r_ = 9 * u
-            sp1 = Stitch.render(c + (-r_, -r_), c + (r_, r_), 5.2 * u, WOOL, rng, kind="wool")
-            sp2 = Stitch.render(c + (r_, -r_), c + (-r_, r_), 5.2 * u, WOOL, rng, kind="wool")
-            self.marks.append((m0 + (m1 - m0) * (j + 0.6) / 3, [sp1, sp2], c))
-        # la lana de casa en casa
+        route = [np.asarray(p_, np.float64) for p_ in self.route]
+        # (la torre del cerro ya está a la vista: calca desde la primera torre escondida, la que está junto a
+        # ella, y rodea cada torre con un lazo de lana, como se marca un lugar en un mapa)
         way = [self.hold_hand]
+        loops = []
+        for p_ in route[1:]:
+            d_ = _unit(p_ - way[-1])
+            r_l = 24 * u
+            th0 = np.arctan2(-d_[1], -d_[0])
+            sgn = 1.0 if d_[0] < 0 else -1.0
+            ring = [p_ + r_l * np.array([np.cos(th0 + sgn * a_), np.sin(th0 + sgn * a_)])
+                    for a_ in np.deg2rad([0, 70, 140, 210, 280, 350])]
+            way += ring
+            loops.append(p_)
+        last_ring = way[-1]
+        # de mano en mano: cada quien estira el brazo hacia donde viene la lana
+        prev = route[-1]
+        hand_pts = {}
         for i in order:
-            way += [doors[i] + (0, 26 * u)]
+            j = next((j for j, d in enumerate(self.dolls) if d["house"] == i and j != self.vigia), None)
+            if j is None:
+                pt = doors[i] + (0, 26 * u)
+            else:
+                sp = self.dolls[j]["spec"]
+                h = sp["hgt"] * (0.74 if sp["kind"] == "child" else 1.0)
+                neck = sp["base"] - h * 0.68
+                side = 1.0 if prev[0] >= sp["fx"] else -1.0
+                pt = np.array([sp["fx"] + side * h * 0.31, neck - h * 0.02])
+                rest = np.array([sp["fx"] - side * h * 0.27, neck + h * 0.26])
+                self.dolls[j]["take"] = doll_layer(self._mk_spec(sp, hands=(rest, pt) if side > 0 else (pt, rest)))
+            hand_pts[i] = pt
+            way.append(pt)
+            prev = pt
         # la lana no pasa por encima del aviso: si un tramo lo cruza, lo rodea por debajo
         nc = np.asarray(self.notice_c, np.float64)
         for j in range(len(way) - 1):
@@ -398,21 +521,28 @@ class Scene:
                 way.insert(j + 1, nc + np.array([0.0, 62 * u]))
                 break
         ex = 0.962 * W
-        last = doors[order[-1]]
+        last = way[-1]
         rise = [np.array([(last[0] + ex) / 2, last[1] - 30 * u]), np.array([ex, last[1] - 160 * u]),
                 np.array([ex + 4 * u, 0.3 * H]), np.array([ex, 0.08 * H]), np.array([ex - 4 * u, -30 * u])]
         path = _wobbly(way + rise, rng, 6 * u, 3.0 * u)
         self.wool = Yarn(path, 8.5 * u, WOOL, rng, couch_every=19 * u, couch_color="#8e160f", fuzz=1.0)
-        arc_at = lambda p: float(self.wool.arc[int(np.argmin(np.linalg.norm(self.wool.pts - p, axis=1)))])
-        Lk = {i: arc_at(doors[i] + (0, 26 * u)) for i in order}
-        self.L_end_houses = Lk[order[-1]]
-        a, b = T["wool"]
-        times = [a, a + 0.55, a + 1.0, b]                    # cada tramo más rápido
-        lens = [0.0] + [Lk[i] for i in order]
+        def arc_at(p_, after=0.0):                        # largo de lana hasta el punto (después de `after`)
+            ok = self.wool.arc >= after
+            d_ = np.linalg.norm(self.wool.pts - p_, axis=1) + np.where(ok, 0, 1e9)
+            return float(self.wool.arc[int(np.argmin(d_))])
+        self.route_knots = []
+        L_route = arc_at(last_ring, after=0.5 * arc_at(loops[-1]))
+        Lh = []
+        for i in order:
+            Lh.append(arc_at(hand_pts[i], after=(Lh[-1] if Lh else L_route)))
+        self.L_end_houses = Lh[-1]
+        a, b = T["trace"]
+        w0, w1 = T["wool"]
         r0, r1 = T["rise"]
-        self.wool_sched = list(zip(times, lens)) + [(r0, self.L_end_houses), (r1, self.wool.length)]
-        self.house_times = {i: t_ for i, t_ in zip(order, times[1:])}
-        self.house_times[own] = m0
+        times = [w0 + 0.25, w0 + 0.47, w1]                  # cada tramo más rápido
+        self.wool_sched = [(a, 0.0), (b, L_route)] + list(zip(times, Lh)) + [(r0, Lh[-1]), (r1, self.wool.length)]
+        self.house_times = {i: t_ for i, t_ in zip(order, times)}
+        self.house_times[own] = a
 
     def wool_len(self, tq):
         sc = self.wool_sched
@@ -424,18 +554,10 @@ class Scene:
         return sc[-1][1]
 
     def wool_active(self, tq):
-        a, b = T["wool"]
+        a, _ = T["trace"]
+        _, b = T["wool"]
         r0, r1 = T["rise"]
         return (a <= tq < b) or (r0 <= tq < r1)
-
-    def mark_active(self, tq):
-        m0, m1 = T["marks"]
-        if not (m0 <= tq < m1):
-            return None
-        for (tt, sps, c) in self.marks:
-            if tq < tt + 1e-6:
-                return c
-        return self.marks[-1][2]
 
     def house_lit(self, tq):
         return {i: tq >= t_ - 1e-6 for i, t_ in self.house_times.items()}
@@ -504,21 +626,25 @@ class Scene:
             return None
         u = self.u
         k = int(round(tq * UFPS))
-        dx = 150 * u if not self.portrait else 60 * u
+        # (en 9:16 cuelga cerca del borde derecho: no parte el cuadro ni pasa por el sol)
+        dx = 150 * u if not self.portrait else 400 * u
         base_eye = self.first_stitch + np.array([dx, -330 * u])
+        # cambio de foco: primero la arpillera nítida y la aguja desenfocada; antes de bajar, la aguja se
+        # enfoca (y la tela se ablanda); al acercarse a la tela, el foco vuelve a la tela
+        focus = {7: 0.35, 8: 0.7, 9: 1.0, 10: 1.0, 11: 0.6, 12: 0.3}.get(k, 0.0)
         if tq < h0 - 1e-6:
             sway = np.sin(k / UFPS * 2 * np.pi / 1.4) * 24 * u
             eye = base_eye + np.array([sway, 0])
             ang = np.sin(k / UFPS * 2 * np.pi / 1.4 + 0.9) * 0.07
             tip = eye + np.array([np.sin(ang), np.cos(ang)]) * 300 * u
-            return dict(eye=eye, tip=tip, near=1.0)
+            return dict(eye=eye, tip=tip, near=1.0, focus=focus)
         i = int(round((tq - h0) * UFPS))
         f = (0.35, 0.75, 1.0)[min(i, 2)]
         end_tip = self.first_stitch + np.array([-4 * u, 6 * u])
         end_eye = end_tip + _unit(np.array([0.6, -0.8])) * 300 * u
         eye = base_eye + (end_eye - base_eye) * f
         tip = (base_eye + np.array([0, 300 * u])) + (end_tip - (base_eye + np.array([0, 300 * u]))) * f
-        return dict(eye=eye, tip=tip, near=float(1 - f) * 0.85)
+        return dict(eye=eye, tip=tip, near=float(1 - f) * 0.85, focus=focus)
 
     def _needle_layers(self, tq, img):
         """La aguja y su hilo en este instante: lista de sprites (el hilo primero). Hunde la tela al entrar."""
@@ -573,23 +699,6 @@ class Scene:
             out += self._thread(self.last_stitch, eye, 3.0 * u, BLK, rj, sag=0.0)
             out.append(needle_sprite(eye, tip, wn, lift=1.6))
             return out, self.last_stitch
-        mc = self.mark_active(tq)
-        if mc is not None:
-            inside = (k % 2 == 0)
-            th = np.deg2rad(58 + rj.normal(0, 4))
-            v = np.array([np.cos(th), np.sin(th)])
-            Lw, ww = 220 * u, 8.8 * u
-            if inside:
-                tip, eye = mc - v * 0.17 * Lw, mc + v * 0.69 * Lw
-                nd = needle_sprite(eye, tip, ww, hide_from=0.8, lift=0.6)
-                self._dimple(img, mc, 8 * u)
-            else:
-                tip = mc + np.array([12 * u, -8 * u])
-                eye = tip + v * Lw
-                nd = needle_sprite(eye, tip, ww, lift=1.3)
-            out += self._thread(mc, eye_of(eye, tip), 8.0 * u, WOOL, rj, sag=0.16, kind="wool")
-            out.append(nd)
-            return out, mc
         if self.wool_active(tq):
             p, d = self.wool.head(self.wool_len(tq))
             inside = (k % 2 == 0)
@@ -627,25 +736,50 @@ class Scene:
         if tq < s1:                                    # una luz cálida cruza por detrás, de izq. a der.
             f = (tq - s0) / (s1 - s0)
             return FMIN, 1.0, dict(band=-0.12 + 1.24 * f)
-        if tq < f1:                                    # toda la tela es linterna; la luz es de mano: se mueve
+        if tq < f1:                                    # una lámpara de mano busca la ruta, torre por torre
             i = int(round((tq - f0) * UFPS))
-            rw = np.random.default_rng(300 + i)
-            cx = 0.5 + 0.16 * np.sin(1.1 * (tq - f0) + 0.4) + rw.normal(0, 0.012)
-            cy = 0.45 + 0.1 * np.cos(1.7 * (tq - f0)) + rw.normal(0, 0.012)
-            return FMIN, (0.75, 1.0)[min(i, 1)], dict(hand=(cx * self.W, cy * self.H), R=0.42 * max(self.W, self.H))
-        if tq < c1:                                    # se apaga la lámpara (clic) y se prende la luz de la sala
+            st = self.lamp_plan[min(i, len(self.lamp_plan) - 1)]
+            if st is None:                             # y se abre: toda la tela es linterna, la línea completa
+                return FMIN, 1.0, "full"
+            (cx, cy), R = st
+            return FMIN, 1.0, dict(hand=(cx, cy), R=R, base=0.05, amp=1.3)
+        if tq < c1:                                    # clic: se apaga la lámpara y se prende la luz de la sala
             i = int(round((tq - c0) * UFPS))
-            return (FMIN * 0.7, 0.55, 0.3, 0.85, 1.0)[min(i, 4)], 0.0, None
+            return (0.42, 0.88, 1.0)[min(i, 2)], 0.0, None
         return 1.0, 0.0, None
 
     def pull_state(self, tq):
-        """Cuántas puntadas de la torre ya salieron (de la última cosida a la primera)."""
-        p0, p1 = T["pull"]
+        """Cuántas puntadas de la torre ya salieron (de la última cosida a la primera). Antes, la vecina toma
+        el hilo y se afirma."""
+        a, b = T["unstitch"]
         n = len(self.tower_idx)
-        if tq < p0 + 0.25:                           # primero toma el hilo y se afirma
+        if tq < a:
             return 0
-        f = np.clip((tq - p0 - 0.25) / (p1 - p0 - 0.4), 0, 1)
+        f = np.clip((tq - a) / (b - a - 0.08), 0, 1)
         return int(round(n * f ** 0.85))
+
+    def route_state(self, tq):
+        """El hilo de la ruta escondida: (A2, front). Primero se tensa (la tela se frunce por delante a lo
+        largo de toda la línea de torres); después se suelta desde la punta lejana hacia el cerro."""
+        r0, r1 = T["route"]
+        L = float(self.route_arc[-1])
+        if tq < r0 - 1e-6:
+            return 0.0, None
+        i = int(round((tq - r0) * UFPS))
+        if i < 3:
+            return (0.55, 1.0, 1.0)[i], L + 80 * self.u
+        n_rel = max(1, int(round((r1 - r0) * UFPS)) - 3)
+        f = (i - 2) / n_rel
+        if f >= 1:
+            return 0.0, None
+        return 1.0, L + 50 * self.u - f * (L + 100 * self.u)
+
+    def route_done(self, tq, arc):
+        """¿Ya salió el hilo de la ruta en este punto (largo `arc` desde el cerro)?"""
+        if tq >= T["route"][1] - 1e-6:
+            return True
+        A2, front = self.route_state(tq)
+        return front is not None and A2 > 0 and front < arc and tq >= T["route"][0] + 3 / UFPS - 1e-6
 
     def _tug(self, img, p, toward, k):
         """La tela da un tironcito donde salta la puntada: se estira hacia la mano que tira."""
@@ -690,8 +824,9 @@ class Scene:
         removed = set(self.tower_idx[::-1][:gone])
         # frunce: la tela (y la silueta: el ruedo sube); lo cosido encima se corre con ella, sin deformarse
         A = self.pucker_amount(tq)
+        A2, front = self.route_state(tq)
         alpha = self.world.ea_main.copy() if hasattr(self, "world") else None
-        img, Tm, alpha = self._pucker(img, Tm, A, alpha)
+        img, Tm, alpha = self._pucker(img, Tm, A, alpha, A2, front)
 
         def off(c):
             if A <= 0.001:
@@ -707,6 +842,10 @@ class Scene:
         if gone:
             for hs_ in self.tower_holes:
                 composite(img, hs_, shadow=0)
+        for (arc_i, sps) in self.route_holes:          # por donde pasaba la ruta escondida quedan pinchazos
+            if self.route_done(tq, arc_i):
+                for hs_ in sps:
+                    composite(img, hs_, shadow=0)
         for (tt, pc, h) in self.sig_pieces:
             if tq + 1e-6 >= tt:
                 dx, dy = off_h(h, pc.center)
@@ -725,22 +864,19 @@ class Scene:
                 dx, dy = off_h(it[4], (it[2] + it[3]) / 2)
                 composite(img, it[1], shadow=0.55, dx=dx, dy=dy)
                 composite_T(Tm, it[1], dx=dx, dy=dy)
-        for (tt, sps, c) in getattr(self, "marks", []):
-            if tq + 1e-6 >= tt:
-                dx, dy = off(c)
-                for sp in sps:
-                    composite(img, sp, shadow=0.5, dx=dx, dy=dy)
-                    composite_T(Tm, sp, dx=dx, dy=dy)
         # el cabo del hilo tras la torre (cortado), mientras la torre siga cosida
         if T["taut"][1] - 0.2 <= tq and gone == 0:
             rj = np.random.default_rng(5)
             for sp in self._thread(self.last_stitch, self.last_stitch + np.array([30, 46]) * u, 3.0 * u, BLK, rj,
                                    sag=0.05):
                 composite(img, sp, 0.5)
-        # lana roja
+        # lana roja (y un nudo en cada torre de la ruta que ya calcó)
         L = self.wool_len(tq)
         if L > 0:
             self.wool.draw(img, L)
+            for (Lk_, sp) in self.route_knots:
+                if L >= Lk_ - 1e-6:
+                    composite(img, sp, shadow=0.5)
         # ventanas encendidas
         for i, lit in self.house_lit(tq).items():
             if lit:
@@ -753,6 +889,7 @@ class Scene:
         if p0 <= tq < p1 + 1.2:
             rj = np.random.default_rng(int(tq * 100))
             n = len(self.tower_idx)
+            r0_, r1_ = T["route"]
             if gone < n and tq < p1:
                 nxt = self.hilvan[self.tower_idx[::-1][gone]][3]
                 if gone > 0:
@@ -760,15 +897,17 @@ class Scene:
                 for sp in self._thread(self.pull_hand, nxt, 3.0 * u, BLK, rj,
                                        sag=(0.2 if not gone else (0.03, 0.14)[k % 2])):
                     composite(img, sp, 0.5)
-            r_ball = (7 + 20 * min(1.0, gone / max(1, n)) ** 0.8) * u
-            ang = np.linspace(0, 2 * np.pi * 6, 120)
-            rr = r_ball * (0.5 + 0.5 * np.abs(np.sin(ang * 0.37)))
-            ball = np.stack([self.ball_pt[0] + rr * np.cos(ang + np.sin(ang * 0.21)),
-                             self.ball_pt[1] - r_ball * 0.7 + rr * 0.7 * np.sin(ang)], 1)
-            for sp in Yarn(ball, 2.6 * u, BLK, np.random.default_rng(4), fuzz=0, kind="floss").chunks:
-                composite(img, sp, 0.45)
+            elif r0_ - 1e-6 <= tq < r1_:
+                # sigue tirando: el hilo de la ruta sale por el pie de la torre, tenso, y la tela da tirones
+                img = self._tug(img, self.H1, self.pull_hand, k)
+                for sp in self._thread(self.pull_hand, self.H1, 3.0 * u, BLK, rj, sag=(0.02, 0.1)[k % 2]):
+                    composite(img, sp, 0.5)
+            route_f = float(np.clip((tq - r0_) / (r1_ - r0_), 0, 1))
+            r_ball = (7 + 16 * min(1.0, gone / max(1, n)) ** 0.8 + 9 * route_f) * u
+            bc = self.ball_pt + np.array([0.0, -r_ball * 0.95])
+            composite(img, _ball_sprite(bc, r_ball, u, int(r_ball * 10)), 0.5)
             if tq < p1:
-                for sp in self._thread(self.pull_hand, self.ball_pt + (0, -r_ball), 2.6 * u, BLK, rj, sag=0.25):
+                for sp in self._thread(self.pull_hand, bc + (0, -r_ball * 0.9), 2.6 * u, BLK, rj, sag=0.25):
                     composite(img, sp, 0.4)
         # aguja
         nd, act = self._needle_layers(tq, img)
@@ -791,7 +930,8 @@ class Scene:
                 field, gain = np.float32(1.0), 11.0
             elif "hand" in lamp:
                 c, R = lamp["hand"], lamp["R"]
-                field = (0.55 + 0.6 * np.exp(-((self.xx - c[0]) ** 2 + (self.yy - c[1]) ** 2) / (2 * R * R)))[..., None]
+                field = (lamp.get("base", 0.55) + lamp.get("amp", 0.6)
+                         * np.exp(-((self.xx - c[0]) ** 2 + (self.yy - c[1]) ** 2) / (2 * R * R)))[..., None]
                 gain = 10.0
                 # la sombra blanda del hilo (a un milímetro de la tela) se corre al revés de la luz
                 sx = -(c[0] - self.W / 2) * 0.006
@@ -905,9 +1045,8 @@ def layout_for(W, H, sc):
     L["shots"] = [(1.17, 1.17, zv, clamp(c_v, zv)),                  # corte al primer plano de las señales
                   (1.3, 2.8, zv * 1.05, clamp(c_v + np.array([24.0, 12.0]) * sc.u, zv * 1.05)),   # se arrima
                   (3.0, 3.0, z0, "c0"),                               # corte al plano general
-                  (6.3, 7.42, zl, clamp(c_to, zl)),                   # acercamiento lento a la constelación
-                  (7.5, 7.5, z0, "c0"),                               # (clic) vuelve el plano general
                   (10.45, 10.45, zp, clamp(c_pu, zp)),                # corte: la vigía y la torre
-                  (10.8, 12.1, zp * 1.08, clamp(c_pu, zp * 1.08)),    # se acerca un poco mientras descose
+                  (10.8, 11.2, zp * 1.05, clamp(c_pu, zp * 1.05)),    # se acerca un poco mientras descose
+                  (T["route"][0], T["route"][0], z0, "c0"),           # corte: toda la ruta se frunce y se suelta
                   (T["dolly"][0], T["dolly"][1], 1.0, "final")]
     return L

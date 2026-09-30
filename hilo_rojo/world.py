@@ -737,12 +737,21 @@ class World:
         t2 = c_s2 + (t_s - c_s) * m
         w = needle_w * self.main.s * z * m
         lift = 0.9 + 3.6 * near
-        sig = 2.8 * near * self.u * z / 1.8
-        # el hilo, desde fuera del cuadro hasta el ojo
+        rf = float(dg.get("focus", 0.0))
+        sig = 2.8 * near * (1 - rf) * self.u * z / 1.8
+        if rf > 0.01:                                     # el foco se va a la aguja: la tela se ablanda
+            out[:] = cv2.GaussianBlur(out, (0, 0), 2.6 * rf * self.u)
+        # el hilo, desde fuera del cuadro, pasa por el ojo; un cabo corto cuelga del otro lado
+        eye_c = e2 + (t2 - e2) * 0.07
         top = np.array([e2[0] + 8.0, -80.0])
-        pts = catmull_rom(np.array([e2, (e2 + top) / 2 + (4.0, 0), top]), 12)
+        pts = catmull_rom(np.array([eye_c, (eye_c + top) / 2 + (4.0, 0), top]), 12)
         ww = 4.6 * self.main_u * z * self.main.s * m
         yarn = Yarn(pts, ww, "#141516", np.random.default_rng(3), fuzz=0, kind="floss")
+        Ln_ = float(np.hypot(*(t2 - e2)))
+        sd = 1.0 if (t2 - e2)[0] <= 0 else -1.0
+        tail = Yarn(catmull_rom(np.array([eye_c, eye_c + np.array([sd * 0.05 * Ln_, 0.14 * Ln_]),
+                                          eye_c + np.array([sd * 0.07 * Ln_, 0.3 * Ln_])]), 10),
+                    ww, "#141516", np.random.default_rng(4), fuzz=0, kind="floss")
         shm = np.zeros((H, W), np.float32)
         for ch in yarn.chunks:
             _alpha_into(shm, ch)
@@ -756,6 +765,8 @@ class World:
         for ch in yarn.chunks:
             composite(out, _blur_sprite(Sprite(ch.x0, ch.y0, ch.rgb, ch.a, None), sig), 0.0)
         composite(out, _blur_sprite(Sprite(nd.x0, nd.y0, nd.rgb, nd.a, None), sig), 0.0)
+        for ch in tail.chunks:
+            composite(out, _blur_sprite(Sprite(ch.x0, ch.y0, ch.rgb, ch.a, None), sig), 0.0)
 
     def _end_stitch(self, out, tq, win, cam, k):
         """La aguja del principio vuelve, ahora con la lana roja, y borda sobre el trazo a lápiz la última
@@ -1015,7 +1026,7 @@ class World:
                 lw = self.main.img_to_world(lamp["hand"])
                 lsx, lsy = lw @ P[:, :2].T + P[:, 2]
                 R = lamp["R"] * self.main.s * z
-                fld = amF * (0.5 + np.exp(-((self.xx - lsx) ** 2 + (self.yy - lsy) ** 2) / (2 * R * R)))
+                fld = amF * (lamp.get("base", 0.5) + np.exp(-((self.xx - lsx) ** 2 + (self.yy - lsy) ** 2) / (2 * R * R)))
             elif "band" in lamp:
                 lw = self.main.img_to_world((lamp["band"] * self.main.iw, self.main.ih / 2))
                 lsx = float((lw @ P[:, :2].T + P[:, 2])[0])
