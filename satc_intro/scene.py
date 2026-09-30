@@ -192,7 +192,8 @@ class Scene:
         self.bird_colors = dict(back=kraft * lin("#7d7465") ** 0.95, head=kraft * lin("#8f8a80") ** 0.95,
                                 white=self.col["white"], ink=self.col["ink"], red=self.col["red"])
         self.flock.set_textures(ph, self.rough_dx * 1.6, self.rough_dy * 1.6,
-                                dict(back=lin("#7d7465"), head=lin("#8f8a80")))
+                                dict(back=lin("#7d7465"), head=lin("#8f8a80")),
+                                fbm((H, W), 9 * u, np.random.default_rng(seed + 77), octaves=3))
 
         # --- grano fijo al papel, distinto en cada plancha --------------------------------------------------
         fine = fbm((H, W), 1.6, r2, octaves=2)

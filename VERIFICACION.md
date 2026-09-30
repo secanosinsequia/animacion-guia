@@ -27,4 +27,12 @@ acercamientos) y devolvieron veredicto, puntaje y correcciones concretas.
 | Ronda | Veredicto | Sorpresa | Lo principal |
 |---|---|---|---|
 | 1 | Rechazado | 7/10 | «El concepto es de premio.» Le sorprendieron la lámina como especie viva, el despertar ante la línea de regla, el papel que se vuelve bandada y la posta final. Pidió que ALERTA saliera del pico (sin gotas: se leía como herida), un puntillado legible antes del clic, intermedios limpios (sin rótulas, fantasmas ni iniciales aplastadas), aves con tinta y aguada, un primer segundo más ágil con reposo final ≥ 1,1 s, y una versión 9:16 para teléfono. |
-| 2 | *(en curso)* | | |
+| 2 | **Aprobado** | **8/10** | «El murmullo por fin se lee… se ve cómo las señales débiles se vuelven palabra, y el clic lo confirma. El grito es limpio… El cierre ahora respira: la frase final queda quieta 1,17 s, se alcanza a leer y emociona.» Revisó los 6 MP4 cuadro a cuadro. Se aplicaron sus 3 pulidos: anillo centrado en la pupila, mitades que pasan directo a alas y aves con manchas de pigmento y borde de agua. |
+
+## Resumen
+
+| Verificador | Rondas | Puntajes | Resultado |
+|---|---|---|---|
+| 1 · Concepto y guion | 3 | 5 → 7 → **8** | Aprobado |
+| 2 · Estilo, dibujo y movimiento | 4 | 5 → 7 → 8 → **8,5** | Aprobado |
+| 3 · Entrega final (ojos frescos) | 2 | 7 → **8** | Aprobado |

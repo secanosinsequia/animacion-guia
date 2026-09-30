@@ -2,10 +2,9 @@
 
 Metamorfosis (por letra, en una onda circular que sale del ojo de la vigía):
   k 0–1  la letra se aprieta (lo dibuja title.py);
-  k 2–3  se parte por su eje y las mitades se abren en V (20°, 40° desde la vertical), en su plancha
-         riso (grano y color);
-  k 4    un aletazo: las mitades bajan en Λ;
-  k 5    sustitución seca por el queltehue dibujado, del mismo tamaño y con las alas arriba.
+  k 2    se parte por su eje y las mitades se abren en V (35° desde la vertical), en su plancha riso;
+  k 3    las mitades ya son alas: sustitución seca por el queltehue dibujado, del mismo tamaño y con
+         las alas arriba.
 Vuelo: ciclo de 4 poses «en dos» (V, horizontal, Λ, horizontal); alas anchas y redondeadas, brazo pardo
 con borde de fuga negro, franja blanca y mano negra. Seis cuadros antes de posarse: alas arriba en V
 mostrando el blanco y patas adelante; al tocar el suelo, squash (Y 0,9) y las alas se pliegan.
@@ -25,7 +24,7 @@ from .geometry import catmull_rom
 from .ink import Mask, Stroke
 
 FPS = 30.0
-K_SUB = 5          # cuadros desde el «pop» hasta la sustitución por el pájaro dibujado
+K_SUB = 3          # cuadros desde el «pop» hasta la sustitución por el pájaro dibujado
 LAND_FRAMES = 6    # cuadros de pose de aterrizaje antes de tocar el suelo
 FOLD_FRAMES = 4    # squash (2) + alas que se pliegan (2)
 SHRINK_FRAMES = 6  # la plancha roja de la vigía de turno se contrae hacia el ojo
@@ -75,7 +74,8 @@ class Stamp:
             return
         reg = img[self.y0:self.y1, self.x0:self.x1]
         g = grain[self.y0:self.y1, self.x0:self.x1]
-        a = np.clip(a * alpha * (0.78 + 0.22 * g), 0, 1)
+        rim = np.clip(a - cv2.GaussianBlur(a, (0, 0), float(np.clip(0.012 * max(a.shape), 1.2, 3.2))), 0, 1)
+        a = np.clip((a * (0.70 + 0.30 * g) + 0.8 * rim) * alpha, 0, 1.2)
         reg *= np.exp(a[..., None] * k * np.log(np.clip(color, 0.01, 1))[None, None, :])
 
     def composite(self, img, colors, grain, tex=None):
@@ -99,10 +99,13 @@ class Stamp:
                     gxy = (gx_ + tex["dx"][y0:y1, x0:x1], gy_ + tex["dy"][y0:y1, x0:x1])
                 a = cv2.remap(a, gxy[0], gxy[1], cv2.INTER_LINEAR)
             if tex is not None and k in tex["pigments"]:
-                # aguada: granulación en los valles del papel y borde que se oscurece al secar
+                # aguada: granulación en los valles del papel, pigmento que se junta en manchas y un
+                # borde de agua que se oscurece al secar (más ancho en las aves grandes)
                 ph = tex["ph"][y0:y1, x0:x1]
-                rim = np.clip(a - cv2.GaussianBlur(a, (0, 0), 1.3), 0, 1)
-                dens = np.clip(a * (0.80 + 0.40 * (1 - ph)) * (0.9 + 0.2 * g) + 0.9 * rim, 0, 1.4)
+                mot = tex["mottle"][y0:y1, x0:x1]
+                sig = float(np.clip(0.012 * max(a.shape), 1.2, 3.2))
+                rim = np.clip(a - cv2.GaussianBlur(a, (0, 0), sig), 0, 1)
+                dens = np.clip(a * (0.72 + 0.46 * (1 - ph)) * (0.72 + 0.56 * mot) + 1.3 * rim, 0, 1.5)
                 reg *= np.exp(dens[..., None] * 0.95 * np.log(np.clip(tex["pigments"][k], 0.02, 1))[None, None, :])
                 continue
             if k == "white":
@@ -227,8 +230,8 @@ class Flock:
         self.red_birds = [b for b in self.birds if b.color == "red"]
         self.t_eye = self.duty.t_land + SHRINK_FRAMES / FPS
 
-    def set_textures(self, ph, dx, dy, pigments):
-        self.tex = dict(ph=ph, dx=dx, dy=dy, pigments=pigments)
+    def set_textures(self, ph, dx, dy, pigments, mottle):
+        self.tex = dict(ph=ph, dx=dx, dy=dy, pigments=pigments, mottle=mottle)
 
     # --- la vigía de turno ------------------------------------------------------------------------------
     def duty_eye(self):
@@ -265,12 +268,10 @@ class Flock:
             k = b.k(t)
             if t < b.t_pop or k < 2 or k >= K_SUB:
                 continue
-            pos = b.meta_pos(t)
-            flip = k >= 4                                   # k 2–3: se abre en V · k 4: aletazo en Λ
-            theta = np.deg2rad(20 if k == 2 else 40)
+            pos = b.meta_pos(t)                             # k 2: las mitades se abren en V y en k 3 ya son alas
             names = ("white", "red") if b.color == "red" else ("ink",)
             for name in names:
-                self._halves(plates[name], b, pos, theta, 0.75, flip, alpha=0.85 if flip else 1.0)
+                self._halves(plates[name], b, pos, np.deg2rad(35), 0.8, False)
 
     # --- dibujo del ave en vuelo (vista frontal-baja: silueta en M) -------------------------------------
     def _wing(self, st, side, theta_deg, flex_deg, length, sp, center, bank):

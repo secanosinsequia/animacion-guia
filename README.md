@@ -106,7 +106,10 @@ genuinamente sorprendidos:
 * **Concepto y guion:** rechazado dos veces (5/10 y 7/10) y aprobado en la tercera ronda (8/10).
 * **Estilo, dibujo y movimiento** (sobre renders reales): rechazado tres veces (5, 7 y 8/10; en la
   última, porque el rojo que goteaba «se leía como sangre») y aprobado en la cuarta (8,5/10).
-* **Entrega final**, con ojos frescos: ver `VERIFICACION.md`.
+* **Entrega final**, con ojos frescos y sin contexto: rechazada una vez (7/10) y aprobada en la
+  segunda ronda (8/10), tras revisar los 6 MP4 cuadro a cuadro.
+
+Detalle de cada ronda en [`VERIFICACION.md`](VERIFICACION.md).
 
 ## Créditos y licencias de recursos de diseño
 

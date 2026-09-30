@@ -203,7 +203,7 @@ class Title:
             d = (t - self.t_ring) * FPS
             if 0 <= d < 6:
                 uu = self.lay["u"]
-                e = self.eye_fn(self.t_ring)
+                e = self.eye_fn(t)                  # centrado en la pupila (la cabeza avanza al gritar)
                 r = (9 + 7.5 * d) * uu
                 c = masks["red"].ctx
                 c.set_line_width(max(0.8, (2.8 - 0.4 * d) * uu))
