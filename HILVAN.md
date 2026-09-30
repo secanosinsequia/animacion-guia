@@ -43,7 +43,7 @@ llamado a leer la guía es ese bolsillo con su carta).
 |---|---|
 | `output/hilvan_1920x1080.mp4` | 16:9, H.264, 16,95 s, 24 fps («en dos») |
 | `output/hilvan_1080x1920.mp4` | 9:16 para teléfono, compuesto aparte |
-| `output/hilvan_*_scroll.mp4` | Las mismas, con todos los cuadros clave (para `video.currentTime`) |
+| `output/hilvan_*_scroll.mp4` | Las mismas a 12 imágenes por segundo, todas cuadro clave (para mover con `video.currentTime`) |
 | `output/hilvan_poster_*.png` | Cuadro 0, el contraluz (6,83 s) y el cuadro final, en los dos formatos |
 | `output/hilvan_vista_previa.gif` | Vista previa liviana |
 | `web/hilvan/index.html` | La intro con scroll: 7 paradas con texto en HTML, `<h1>` real, bolsillo con la carta |
