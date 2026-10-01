@@ -15,7 +15,7 @@ siguiente los resolvió.
 | 5 | v3.2 (16,95 s) | | **8,5/10, aprobado** («sí, me sorprendió»; 2 bloqueantes) | **8,5/10, aprobado** («sí, me sorprendió») | 8/10 («la primera vez que estuvo cerca») |
 | 6 | v3.3 (16,85 s) | | **9/10, aprobado** («sí, me sorprendió»; sin bloqueantes) | **9/10, aprobado** («sí, me sorprendió»; 1 obligatorio) | 16:9: **8,5/10, aprobado** («sí, me sorprendió»); 9:16: 7,5/10 |
 | 7 | v3.4 (16,93 s) | | **9/10, aprobado** («sí, me sorprendió»; sin bloqueantes) | **9/10, aprobado** («sí, me sorprendió»; 1 obligatorio) | 16:9: **8,5/10, aprobado**; 9:16: **8,5/10, aprobado** («sí, me sorprendió»; 1 obligatorio) |
-| 8 | v3.5 (16,93 s) | | *(pendiente)* | *(pendiente)* | *(pendiente)* |
+| 8 | v3.5 (16,93 s) | | **9/10, aprobado** («sí, me sorprendió»; 1 bloqueante, corregido en v3.5.1) | **9/10, aprobado** («sí, me sorprendió»; sin bloqueantes) | 16:9: **9/10, aprobado**; 9:16: **9/10, aprobado** («sí, me sorprendió»; sin bloqueantes) |
 
 ## Qué pidieron y qué se hizo
 
@@ -106,3 +106,11 @@ Los tres aprobaron, también 9:16. Antes de publicar pidieron:
 | La «a» de dos pisos solo en la bajada (B, D) | La misma «a» en toda la etiqueta, también en la que borda la aguja. |
 | El techo en media agua de la casa azul flotaba sobre el río (C) | La pared sube hasta meterse bajo el techo y el alero es corto. |
 | «HARINA» se leía en espejo en 16:9 (C, B) | Letras del estarcido más gruesas y oscuras, y menos trama encima. |
+
+### Ronda 8 → v3.5.1: confirmación
+Los tres confirmaron que lo pedido quedó resuelto y que nada se rompió; D midió el video entero por zonas y
+no hay ningún destello (el umbral de riesgo es 3 por segundo). Un último ajuste:
+| Pedido | Qué se hizo |
+|---|---|
+| En 16:9 la aguja acostada sobre «Alerta» se leía como una raya o un macrón en el póster final (B, bloqueante; C) | Asoma en el margen izquierdo, junto a «Sistema», en diagonal y lejos de las letras, como en 9:16. |
+| La penumbra del clic duraba una sola imagen (C) | Dura dos imágenes antes de que prenda el tubo, que titila una vez, suave. |
