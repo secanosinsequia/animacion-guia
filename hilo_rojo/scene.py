@@ -962,7 +962,7 @@ class Scene:
             return FMIN, 1.0, dict(hand=(cx, cy), R=R, base=base, amp=2.6, line=line)
         if tq < c1:                                    # clic: se apaga la lámpara y la sala queda en penumbra (la
             i = max(0, fidx(tq, c0))                   # luz de la ventana); el tubo prende con un solo titileo suave
-            return (0.45, 1.0, 0.82, 1.0)[min(i, 3)], 0.0, None   # (nunca a negro ni destellos: fotosensibilidad)
+            return (0.42, 0.42, 1.0, 0.84)[min(i, 3)], 0.0, None  # (nunca a negro ni destellos: fotosensibilidad)
         if l0 - 1e-6 <= tq < l1:                       # otra vez la lámpara detrás: el revés, ahora vacío
             i = fidx(tq, l0)
             n = fidx(l1 - 1e-3, l0) + 1                # imágenes del destello

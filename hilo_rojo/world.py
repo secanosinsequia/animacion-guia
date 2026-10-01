@@ -403,6 +403,7 @@ class World:
         refs = []                                  # (trazo, palabra): para el control de legibilidad
         word_id = 0
         wool_start = None
+        first_start = None                         # el punto más a la izquierda de la primera palabra
         half_w = lambda kind: (2.7 if kind == "wool" else (1.25 if kind == "small" else 1.4)) * u2
         for (base, cap, words) in spec["lines"]:
             ws, gaps, total = trace(words, cap, base, fit)
@@ -458,6 +459,10 @@ class World:
             for lw in line_words:
                 kind, x_w = lw["kind"], lw["x"]
                 for st, gw_ in lw["sts"]:
+                    if lw["id"] == 0 and len(st):
+                        i0 = int(np.argmin(st[:, 0]))
+                        if first_start is None or st[i0, 0] < first_start[0]:
+                            first_start = st[i0].copy()
                     if kind == "wool":
                         if len(st) < 2:
                             continue
@@ -542,6 +547,7 @@ class World:
         self.title_tail = [to_wall2(st) for st in tail]
         self.title_tail_w = 5.4 * u2
         self.title_wool_start = to_wall2(np.array([wool_start]))[0] if wool_start is not None else None
+        self.title_first_start = to_wall2(np.array([first_start]))[0] if first_start is not None else None
         for (nx_, ny_) in ((x0 + 26, y0 + 22), (x1 - 26, y0 + 18)):
             out.append(knot((nx_, ny_), 7 * self.u, "#4a4440", rng))
         return out
@@ -924,19 +930,14 @@ class World:
             sr = S(np.array([2 * rect[2], 2 * rect[1]]))
             # por detrás de la tira, la aguja va a su lugar y asoma por delante de punta, cada vez más (la hebra
             # queda atrás): ahí se queda, a medio pasar, como quien deja la costura para después
-            if ws[0] - sl[0] > 0.2 * (sr[0] - sl[0]):
-                # «Alerta» va a mitad de renglón: asoma acostada a lo largo del dobladillo de arriba, sobre
-                # «Alerta», con la punta hacia la izquierda (no tapa ninguna letra)
-                xa1 = max(float(np.max(p_[:, 0])) for p_ in pts)
-                y_hem = lambda x_: sl[1] + (x_ - sl[0]) / max(sr[0] - sl[0], 1) * (sr[1] - sl[1]) + 7 * u_
-                eye = np.array([xa1 + 16 * u_, y_hem(xa1 + 16 * u_)])
-                tip = eye + _unit2(np.array([-1.0, 0.05])) * Ln
-                hides = (0.8, 0.62, 0.42)
-            else:
-                # «Alerta» empieza el renglón: asoma en el margen izquierdo, la punta hacia arriba
-                tip = ws + np.array([-66, 18]) * u_ + _unit2(np.array([-0.42, -0.9])) * 0.05 * Ln
-                eye = tip - _unit2(np.array([-0.42, -0.9])) * Ln * 0.95
-                hides = (0.82, 0.6, 0.38)
+            # asoma en el margen izquierdo, en diagonal y con la punta hacia arriba, junto a la primera letra
+            # del renglón (en 16:9 «Sistema», en 9:16 «Alerta»): lejos de las letras, se lee como aguja
+            mid_line = ws[0] - sl[0] > 0.2 * (sr[0] - sl[0])
+            ref = S(self.title_first_start) if (mid_line and self.title_first_start is not None) else ws
+            d_ = _unit2(np.array([-0.42, -0.9]))
+            tip = ref + np.array([-70, -16] if mid_line else [-66, 18]) * u_ + d_ * 0.05 * Ln
+            eye = tip - d_ * Ln * 0.95
+            hides = (0.82, 0.58, 0.3) if mid_line else (0.82, 0.6, 0.38)
             h_ = hides[min(g2, 3) - 1] if g2 < 3 else hides[2]
             composite(out, _needle_woven(eye, tip, wn, (-0.01, h_)), 0.45)
             return
