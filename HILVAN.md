@@ -43,6 +43,9 @@ llamado a leer la guía es ese bolsillo con su carta).
 |---|---|
 | `output/hilvan_1920x1080.mp4` | 16:9, H.264, 16,93 s, 24 fps («en dos») |
 | `output/hilvan_1080x1920.mp4` | 9:16 para teléfono, compuesto aparte |
+| `output/hilvan_*_voz.mp4` | Los mismos videos con voz en off (mujer, español latinoamericano) y música original; guion en [`GUION_VOZ.md`](GUION_VOZ.md) |
+| `output/hilvan_voz.srt`, `.vtt` | Subtítulos de la voz en off |
+| `output/audio/` | La mezcla (`hilvan_mezcla.wav`, `.m4a`) y las pistas separadas de voz y música |
 | `output/hilvan_*_scroll.mp4` | Las mismas a 12 imágenes por segundo, todas cuadro clave (para mover con `video.currentTime`) |
 | `output/hilvan_poster_*.png` | Cuadro 0, el contraluz con la línea completa (7,0 s) y el cuadro final, en los dos formatos |
 | `output/hilvan_vista_previa.gif` | Vista previa liviana |
@@ -75,6 +78,9 @@ Con 4 núcleos, cada formato tarda ≈ 3 min (203 imágenes únicas). Para proba
 | `world.py` | La pared encalada, el cordel, los perritos, las telas colgadas (comba y pliegues), la tira del título (con un control automático de legibilidad del bordado: si una letra pierde su punto, su tilde o su travesaño, el render se detiene), la cámara por cortes y pasos con paralaje por capas y foco, el frente rojo y los péndulos, la aguja del cierre, el grano y el bamboleo de película. |
 | `bolsillo.py` | El revés con el bolsillo y la carta, para la web. |
 | `render.py` | Render en paralelo y codificación con ffmpeg. |
+| `guion.py` | El guion de la voz en off: cada frase con su ventana de tiempo, lo que se ve y cómo decirla. |
+| `sonido.py` | La voz (Piper, varias tomas por frase y la mejor), la cadena de locución, la mezcla a -16 LUFS y los MP4 con sonido. |
+| `musica.py` | La música original, sintetizada: guitarra y charango (Karplus-Strong con caja de madera), bombo legüero, bordón, vidrio y ruidos de sala, al pulso del video. |
 
 ## Verificación
 

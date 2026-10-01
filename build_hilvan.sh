@@ -27,4 +27,6 @@ FF=$(python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())")
 "$FF" -y -loglevel error -framerate 12 -i build/hilvan_1920x1080/u%04d.png \
   -vf "fps=6,scale=480:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
   output/hilvan_vista_previa.gif
+# Voz en off (tomas guardadas en hilo_rojo/audio/), música original y mezcla: MP4 con sonido, audio y subtítulos
+python -m hilo_rojo.sonido --out output
 echo "Listo: output/hilvan_* y web/hilvan/"
