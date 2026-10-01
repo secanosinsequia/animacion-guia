@@ -14,7 +14,8 @@ siguiente los resolvió.
 | 4 | v3.1 (16,95 s) | | (interrumpida por un reinicio) | 8/10 («estuve cerca») | 7,5/10 |
 | 5 | v3.2 (16,95 s) | | **8,5/10, aprobado** («sí, me sorprendió»; 2 bloqueantes) | **8,5/10, aprobado** («sí, me sorprendió») | 8/10 («la primera vez que estuvo cerca») |
 | 6 | v3.3 (16,85 s) | | **9/10, aprobado** («sí, me sorprendió»; sin bloqueantes) | **9/10, aprobado** («sí, me sorprendió»; 1 obligatorio) | 16:9: **8,5/10, aprobado** («sí, me sorprendió»); 9:16: 7,5/10 |
-| 7 | v3.4 (16,93 s) | | *(pendiente)* | *(pendiente)* | *(pendiente)* |
+| 7 | v3.4 (16,93 s) | | **9/10, aprobado** («sí, me sorprendió»; sin bloqueantes) | **9/10, aprobado** («sí, me sorprendió»; 1 obligatorio) | 16:9: **8,5/10, aprobado**; 9:16: **8,5/10, aprobado** («sí, me sorprendió»; 1 obligatorio) |
+| 8 | v3.5 (16,93 s) | | *(pendiente)* | *(pendiente)* | *(pendiente)* |
 
 ## Qué pidieron y qué se hizo
 
@@ -91,3 +92,17 @@ B y C aprobaron con 9/10; D aprobó 16:9 y pidió que el teléfono tuviera el mi
 | Una línea finísima bajo la aguja del póster (C) | Era la silueta de la aguja que seguía más allá de la punta: corregida. |
 | En 9:16 el hilo de la aguja del póster cruzaba la casa amarilla y partía el cuadro (B, D) | La aguja cuelga más arriba, sobre los cerros: su hilo solo cruza el cielo. |
 | La lana roja de grosor parejo y curvas suaves (D) | La lana engrosa y adelgaza sin regla, y se quiebra un poco donde la fijan. |
+
+### Ronda 7 → v3.5: lo que faltaba para publicar
+Los tres aprobaron, también 9:16. Antes de publicar pidieron:
+| Pedido | Qué se hizo |
+|---|---|
+| El clic iba a negro y la luz destellaba dos veces en 0,25 s: con el scroll, riesgo de fotosensibilidad (D, obligatorio; B) | Al apagarse la lámpara la sala queda en penumbra (la luz de la ventana) y el tubo prende con un solo titileo suave, sin pasar por negro: ningún cambio de luz cuenta como destello. |
+| En el revés vacío el brillo rojo de la lana no llegaba a la niña (C, obligatorio) | La lana llega entera hasta la última mano, como de día. |
+| La lana se veía como neón o tira de LED (B, C, D) | A contraluz la lana es casi opaca: rojo vino oscuro que varía con la torsión, solo la pelusa del borde se enciende roja, los nudos quedan oscuros, sin halo; los pinchazos que quedan bajo la lana no brillan. |
+| Pinchazos iguales y equidistantes, como una guirnalda (D) | Espaciado irregular, tamaños distintos, algunos alargados o dobles y alguno que falta; más chicos en 16:9. |
+| Un haz de lámpara poco definido y la sombra del brazo que no se veía (C, D) | Foco tibio de centro más fuerte y caída más rápida, sobre una tela que brilla menos; la mano con el mango de la lámpara le muerde el borde de abajo y el antebrazo se va hacia abajo. |
+| En 16:9 la aguja final flotaba en diagonal, y saltaba a su lugar en una sola imagen (D, B) | La aguja se hunde al final de la «a», pasa por detrás de la tira y asoma de punta en su lugar, cada vez más (16:9: acostada a lo largo del dobladillo, sobre «Alerta»; 9:16: en el margen). |
+| La «a» de dos pisos solo en la bajada (B, D) | La misma «a» en toda la etiqueta, también en la que borda la aguja. |
+| El techo en media agua de la casa azul flotaba sobre el río (C) | La pared sube hasta meterse bajo el techo y el alero es corto. |
+| «HARINA» se leía en espejo en 16:9 (C, B) | Letras del estarcido más gruesas y oscuras, y menos trama encima. |

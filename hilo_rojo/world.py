@@ -392,7 +392,7 @@ class World:
 
         def trace(words, cap, base, k=1.0):
             ws = [(*hershey_strokes_es(txt, fnt(kind), cap * 2 * k, 0, base * 2, anchor="left", ref="H",
-                                       two_story_a=(kind == "small")), kind)
+                                       two_story_a=True), kind)
                   for (txt, kind) in words]
             gaps = [cap * 2 * k * (0.8 if "wool" in (ws[i][2], ws[i + 1][2]) else 0.64) for i in range(len(ws) - 1)]
             return ws, gaps, sum(w for _, w, _ in ws) + sum(gaps)
@@ -922,29 +922,23 @@ class World:
             rect = self.L["title"]["rect"]
             sl = S(np.array([2 * rect[0], 2 * rect[1]]))
             sr = S(np.array([2 * rect[2], 2 * rect[1]]))
+            # por detrás de la tira, la aguja va a su lugar y asoma por delante de punta, cada vez más (la hebra
+            # queda atrás): ahí se queda, a medio pasar, como quien deja la costura para después
             if ws[0] - sl[0] > 0.2 * (sr[0] - sl[0]):
-                # «Alerta» va a mitad de renglón: la aguja queda clavada en el dobladillo de arriba de la
-                # tira, junto a la «a», con el ojo sobre la pared (no tapa ninguna letra)
-                a0 = pts[0][0]
-                tip = np.array([a0[0] - 26 * u_, sl[1] + (a0[0] - sl[0]) / max(sr[0] - sl[0], 1) * (sr[1] - sl[1])
-                                + 9 * u_])
+                # «Alerta» va a mitad de renglón: asoma acostada a lo largo del dobladillo de arriba, sobre
+                # «Alerta», con la punta hacia la izquierda (no tapa ninguna letra)
+                xa1 = max(float(np.max(p_[:, 0])) for p_ in pts)
+                y_hem = lambda x_: sl[1] + (x_ - sl[0]) / max(sr[0] - sl[0], 1) * (sr[1] - sl[1]) + 7 * u_
+                eye = np.array([xa1 + 16 * u_, y_hem(xa1 + 16 * u_)])
+                tip = eye + _unit2(np.array([-1.0, 0.05])) * Ln
+                hides = (0.8, 0.62, 0.42)
             else:
-                tip = ws + np.array([-66, 18]) * u_      # «Alerta» empieza el renglón: en el margen izquierdo
-            d_ = _unit2(np.array([-0.42, -0.9]))
-            eye = tip + d_ * Ln * 0.95
-            nd = needle_sprite(eye, tip, wn, hide_from=0.86, lift=0.8)
-            sw = np.sin((tq - b) * 2 * np.pi / 1.7) * 2.5 * u_
-            e_pt = eye_of(eye, tip)
-            # la hebra: del ojo baja en un bucle y entra a la tela junto a la aguja; el cabo cuelga del ojo
-            enter = tip - d_ * 0.12 * Ln + np.array([9, -4]) * u_
-            loop = catmull_rom(np.array([e_pt, e_pt + np.array([16 + sw, 34]) * u_,
-                                         enter + np.array([6, -14]) * u_, enter]), 10)
-            tail = catmull_rom(np.array([e_pt, e_pt + np.array([-7 + sw, 16]) * u_,
-                                         e_pt + np.array([-10 + 1.5 * sw, 30]) * u_]), 8)
-            for pth in (loop, tail):
-                for ch in Yarn(pth, ww, WOOL, rng, fuzz=0.6).chunks:
-                    composite(out, ch, 0.35)
-            composite(out, nd, 0.6)
+                # «Alerta» empieza el renglón: asoma en el margen izquierdo, la punta hacia arriba
+                tip = ws + np.array([-66, 18]) * u_ + _unit2(np.array([-0.42, -0.9])) * 0.05 * Ln
+                eye = tip - _unit2(np.array([-0.42, -0.9])) * Ln * 0.95
+                hides = (0.82, 0.6, 0.38)
+            h_ = hides[min(g2, 3) - 1] if g2 < 3 else hides[2]
+            composite(out, _needle_woven(eye, tip, wn, (-0.01, h_)), 0.45)
             return
         if tq < t_in and link is not None:            # baja por su hebra, desde el nudo del cordel
             j_ = int(np.searchsorted(arc_l, link_upto))
@@ -1277,6 +1271,21 @@ def _glyph_groups(strokes, tol):
             hi_g = max(hi_g, hi)
         gid[idx] = g
     return gid
+
+
+def _needle_woven(eye, tip, wn, hide):
+    """Aguja pasada por la tela: se ve el lado del ojo y la punta; el tramo del medio va por debajo."""
+    nd = needle_sprite(eye, tip, wn, lift=0.35)
+    h, w = nd.a.shape
+    yy, xx = np.mgrid[nd.y0:nd.y0 + h, nd.x0:nd.x0 + w].astype(np.float32) + 0.5
+    d = np.asarray(tip, np.float64) - np.asarray(eye, np.float64)
+    L = float(np.hypot(*d)) + 1e-9
+    t = d / L
+    s = ((xx - eye[0]) * t[0] + (yy - eye[1]) * t[1]) / L
+    under = np.clip((s - hide[0]) * L / 1.5 + 0.5, 0, 1) * np.clip((hide[1] - s) * L / 1.5 + 0.5, 0, 1)
+    vis = (1 - under).astype(np.float32)
+    sh = None if nd.sh is None else (nd.sh * vis).astype(np.float32)
+    return Sprite(nd.x0, nd.y0, (nd.rgb * vis[..., None]).astype(np.float32), (nd.a * vis).astype(np.float32), sh)
 
 
 def _blur_sprite(sp, sig):

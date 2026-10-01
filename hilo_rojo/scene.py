@@ -225,7 +225,7 @@ class Scene:
         se queda; después se levanta (una imagen) y se abre: la línea completa, una sola vez (None)."""
         u = self.u
         R = 0.115 * max(self.W, self.H)
-        B0 = 0.45                                      # la tela entera brilla; donde está la lámpara, mucho más
+        B0 = 0.32                                      # la tela entera brilla; donde está la lámpara, mucho más
         signals = [np.mean(np.array(self.info["stakes"]), axis=0), np.asarray(self.notice_c, np.float64),
                    np.asarray(self.H4, np.float64)]
         plan = []
@@ -245,26 +245,25 @@ class Scene:
         return plan
 
     def _hand_shadow(self, c, R, k):
-        """La mano que sostiene la lámpara por detrás, con la linterna: tapa la luz del fondo de la sala y deja
-        en la tela una sombra blanda (está a unos centímetros), que nace bajo el foco y se va hacia abajo.
-        Devuelve una máscara HxW (0..1)."""
+        """La mano que sostiene la lámpara por detrás de la tela: el mango y el puño (con sus dedos) tapan el borde
+        de abajo del foco, y el antebrazo se va hacia abajo; como están a unos centímetros de la tela, la sombra
+        es blanda. Devuelve una máscara HxW (0..1)."""
         key = int(R)
         cache = self.__dict__.setdefault("_hand_cache", {})
         if key not in cache:
-            ang = np.deg2rad(16)                       # la linterna viene de abajo, un poco desde la derecha
-            v = np.array([np.sin(ang), np.cos(ang)])  # a lo largo de la linterna (hacia la mano)
+            ang = np.deg2rad(14)                       # la mano viene de abajo, un poco desde la derecha
+            v = np.array([np.sin(ang), np.cos(ang)])  # a lo largo del brazo (hacia abajo)
             n_ = np.array([v[1], -v[0]])
             P_ = lambda s_, e_: s_ * R * v + e_ * R * n_
             polys = [
-                [P_(0.12, -0.30), P_(0.12, 0.30), P_(0.5, 0.26), P_(0.5, -0.26)],        # cabeza de la linterna
-                [P_(0.5, -0.19), P_(0.5, 0.19), P_(2.0, 0.19), P_(2.0, -0.19)],          # cuerpo
-                [P_(1.55, -0.34), P_(1.55, 0.36), P_(3.8, 0.52), P_(3.8, -0.46)],         # antebrazo
+                [P_(0.42, -0.1), P_(0.42, 0.1), P_(1.25, 0.12), P_(1.25, -0.12)],       # el mango de la lámpara
+                [P_(1.3, -0.25), P_(1.3, 0.27), P_(3.7, 0.38), P_(3.7, -0.34)],          # el antebrazo
             ]
-            ell = [(P_(1.2, 0.02), (0.44, 0.52))]                                          # el puño
-            ell += [(P_(0.86 + 0.2 * j, 0.40), (0.14, 0.12)) for j in range(4)]          # los dedos
-            ell += [(P_(0.95, -0.36), (0.1, 0.22))]                                        # el pulgar
+            ell = [(P_(1.05, 0.02), (0.3, 0.36), 0.0)]                                  # el puño
+            ell += [(P_(0.8 + 0.15 * j, 0.27), (0.1, 0.072), 0.0) for j in range(4)]    # los dedos
+            ell += [(P_(0.84, -0.24), (0.07, 0.16), 25.0)]                              # el pulgar
             pts_all = np.vstack([np.array(pl) for pl in polys])
-            pad = 0.6 * R
+            pad = 0.5 * R
             x0, y0 = pts_all.min(axis=0) - pad
             x1, y1 = pts_all.max(axis=0) + pad
             w_, h_ = int(x1 - x0) + 1, int(y1 - y0) + 1
@@ -273,11 +272,12 @@ class Scene:
             for pl in polys:
                 q_ = (np.array(pl) - off) * 4
                 cv2.fillPoly(m, [np.round(q_).astype(np.int32)], 1.0, cv2.LINE_AA, shift=2)
-            for (c_, (ea, eb)) in ell:
+            base_ang = float(np.rad2deg(np.arctan2(v[1], v[0])) - 90)
+            for (c_, (ea, eb), extra) in ell:
                 q_ = (np.asarray(c_) - off) * 4
-                cv2.ellipse(m, (int(q_[0]), int(q_[1])), (int(ea * R * 4), int(eb * R * 4)),
-                            float(np.rad2deg(np.arctan2(v[1], v[0])) - 90), 0, 360, 1.0, -1, cv2.LINE_AA, shift=2)
-            m = cv2.GaussianBlur(m, (0, 0), 0.13 * R)
+                cv2.ellipse(m, (int(q_[0]), int(q_[1])), (int(ea * R * 4), int(eb * R * 4)), base_ang + extra,
+                            0, 360, 1.0, -1, cv2.LINE_AA, shift=2)
+            m = cv2.GaussianBlur(m, (0, 0), 0.06 * R)
             cache[key] = (m, off)
         m, off = cache[key]
         out = np.zeros((self.H, self.W), np.float32)
@@ -383,14 +383,27 @@ class Scene:
                 cv2.circle(core, (int(x * 4), int(y * 4)), max(1, int(r * 4)), float(1 - 0.5 * f), -1, cv2.LINE_AA,
                            shift=2)
                 cv2.circle(loose, (int(x * 4), int(y * 4)), max(1, int(r * 4)), float(f), -1, cv2.LINE_AA, shift=2)
-            if pinholes:                               # puntadas: cada tanto el hilo atraviesa la tela
-                step = int(max(2, round(12 * u / 1.5)))
-                for (x, y) in pts[::step]:
-                    c = np.array([x, y]) + rp.normal(0, 1.0 * u, 2)
-                    ax = rp.uniform(1.7, 2.6) * u
-                    cv2.ellipse(pins, (int(c[0] * 4), int(c[1] * 4)), (max(1, int(ax * 4)), max(1, int(ax * 3))),
-                                float(rp.uniform(0, 180)), 0, 360, float(rp.uniform(0.8, 1.0)), -1, cv2.LINE_AA,
-                                shift=2)
+            if pinholes:          # puntadas: cada tanto el hilo atraviesa la tela (a mano: ni parejas ni iguales)
+                arc = np.concatenate([[0], np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))])
+                lo, hi = (1.7, 2.6) if self.portrait else (1.2, 2.1)
+                s_ = rp.uniform(0, 12 * u)
+                while s_ < arc[-1]:
+                    if rp.random() > 0.1:                              # (alguna falta)
+                        i_ = min(int(np.searchsorted(arc, s_)), len(pts) - 1)
+                        c = pts[i_] + rp.normal(0, 1.0 * u, 2)
+                        ax = rp.uniform(lo, hi) * u
+                        ay = ax * rp.uniform(0.55, 0.9)
+                        if rp.random() < 0.15:                         # alargado: la aguja entró sesgada
+                            ax, ay = ax * 1.6, ay * 0.6
+                        ang = float(rp.uniform(0, 180))
+                        cv2.ellipse(pins, (int(c[0] * 4), int(c[1] * 4)), (max(1, int(ax * 4)), max(1, int(ay * 4))),
+                                    ang, 0, 360, float(rp.uniform(0.7, 1.0)), -1, cv2.LINE_AA, shift=2)
+                        if rp.random() < 0.1:                          # doble: se pinchó dos veces
+                            c2 = c + rp.normal(0, 1.0, 2) * ax * 1.4
+                            cv2.ellipse(pins, (int(c2[0] * 4), int(c2[1] * 4)),
+                                        (max(1, int(ax * 2.4)), max(1, int(ay * 2.4))), ang, 0, 360,
+                                        float(rp.uniform(0.6, 0.9)), -1, cv2.LINE_AA, shift=2)
+                    s_ += 12 * u * rp.uniform(0.7, 1.3)
 
         def sag(a, b, k=0.012, wob=0.0):
             a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
@@ -946,10 +959,10 @@ class Scene:
             if st is None:                             # y se abre: toda la tela es linterna, la línea completa
                 return FMIN, 1.0, "full"
             (cx, cy), R, base, line = st
-            return FMIN, 1.0, dict(hand=(cx, cy), R=R, base=base, amp=2.0, line=line)
-        if tq < c1:                                    # clic: se apaga la lámpara (casi negro); el tubo de la sala
-            i = max(0, fidx(tq, c0))                   # prende, se corta y vuelve a prender
-            return (0.006, 0.9, 0.08, 1.0)[min(i, 3)], 0.0, None
+            return FMIN, 1.0, dict(hand=(cx, cy), R=R, base=base, amp=2.6, line=line)
+        if tq < c1:                                    # clic: se apaga la lámpara y la sala queda en penumbra (la
+            i = max(0, fidx(tq, c0))                   # luz de la ventana); el tubo prende con un solo titileo suave
+            return (0.45, 1.0, 0.82, 1.0)[min(i, 3)], 0.0, None   # (nunca a negro ni destellos: fotosensibilidad)
         if l0 - 1e-6 <= tq < l1:                       # otra vez la lámpara detrás: el revés, ahora vacío
             i = fidx(tq, l0)
             n = fidx(l1 - 1e-3, l0) + 1                # imágenes del destello
@@ -1149,21 +1162,39 @@ class Scene:
                 # el revés vacío: ya no hay hilo escondido; la luz pasa por los pinchazos que dejaron las
                 # torres (su silueta en puntitos) y la lana roja queda encima, a contraluz
                 Te = Tm * 0.55                           # (la lámpara, más lejos: la tela brilla menos que los pinchazos)
-                red_tr = np.array([0.62, 0.05, 0.035], np.float32)     # la lana deja pasar luz roja
-                wool_sps = [ch for ch in self.wool.chunks
-                            if float(np.nanmax(np.where(np.isfinite(ch.smap), ch.smap, -1))) <= self.L_end_houses]
+                # la lana es gruesa: casi no deja pasar luz (rojo vino oscuro, que varía con la torsión); solo las
+                # fibras sueltas del borde filtran la luz y se encienden, rojas. Llega entera hasta la última mano,
+                # como de día; los nudos quedan oscuros
+                core_f = np.array([0.25, 0.022, 0.016], np.float32)
+                rim_f = np.array([0.85, 0.12, 0.07], np.float32)
+                wool_sps = [(ch, True) for ch in self.wool.chunks
+                            if float(np.nanmin(np.where(np.isfinite(ch.smap), ch.smap, 1e12))) <= self.L_end_houses]
                 for (_, sps) in self.route_knots:
-                    wool_sps += sps
-                for sp in wool_sps:
+                    wool_sps += [(sp, False) for sp in sps]
+                wool_cov = np.zeros((self.H, self.W), np.float32)
+                for sp, clip_ in wool_sps:
                     h_, w_ = sp.a.shape
                     x0_, y0_ = max(0, sp.x0), max(0, sp.y0)
                     x1_, y1_ = min(self.W, sp.x0 + w_), min(self.H, sp.y0 + h_)
                     if x1_ <= x0_ or y1_ <= y0_:
                         continue
-                    a_ = sp.a[y0_ - sp.y0:y1_ - sp.y0, x0_ - sp.x0:x1_ - sp.x0][..., None]
+                    sl_ = (slice(y0_ - sp.y0, y1_ - sp.y0), slice(x0_ - sp.x0, x1_ - sp.x0))
+                    a_ = sp.a[sl_]
+                    tw = np.ones_like(a_)
+                    if sp.smap is not None:
+                        sm = np.where(np.isfinite(sp.smap[sl_]), sp.smap[sl_], 0.0)
+                        tw = 1 + 0.15 * np.sin(sm / (7 * self.u)) * np.cos(sm / (23 * self.u))
+                        if clip_:
+                            a_ = a_ * (sp.smap[sl_] <= self.L_end_houses)
+                    k_ = smoothstep(0.6, 0.95, a_)[..., None]
+                    filt = (rim_f * (1 - k_) + core_f * k_) * tw[..., None]
+                    cover = np.clip(2 * a_, 0, 1)[..., None]
                     reg = Te[y0_:y1_, x0_:x1_]
-                    reg[:] = reg * (1 - a_) + a_ * red_tr
-                Te = np.maximum(Te, (np.maximum(self.pinholes, self.route_pins) * 1.0)[..., None])
+                    reg[:] = reg * ((1 - cover) + cover * filt)
+                    wc = wool_cov[y0_:y1_, x0_:x1_]
+                    wc[:] = np.maximum(wc, cover[..., 0])
+                # (la lana tapa los pinchazos que quedan debajo de ella)
+                Te = np.maximum(Te, (np.maximum(self.pinholes, self.route_pins) * (1 - wool_cov))[..., None])
                 field, gain = np.float32(1.0), 14.0
             elif isinstance(lamp, str):
                 # (con el hilo puesto, por sus puntadas apenas se cuela un brillo al borde del hilo)
@@ -1171,11 +1202,14 @@ class Scene:
                 field, gain = np.float32(1.0), 14.0
             elif "hand" in lamp:
                 c, R = lamp["hand"], lamp["R"]
-                base_ = lamp.get("base", 0.55)
-                if lamp.get("line", True) is not None and R < 0.2 * max(self.W, self.H):
-                    base_ = base_ * (1 - 0.6 * self._hand_shadow(c, R, k))   # la mano y la linterna, por detrás
-                field = (base_ + lamp.get("amp", 0.6)
-                         * np.exp(-((self.xx - c[0]) ** 2 + (self.yy - c[1]) ** 2) / (2 * R * R)))[..., None]
+                # el haz: un foco tibio de borde suave (centro más fuerte y caída más rápida) sobre la tela que
+                # brilla pareja; la mano que sostiene la lámpara le muerde el borde de abajo
+                d2 = (self.xx - c[0]) ** 2 + (self.yy - c[1]) ** 2
+                beam = 0.65 * np.exp(-d2 / (2 * (0.55 * R) ** 2)) + 0.35 * np.exp(-d2 / (2 * R * R))
+                field = lamp.get("base", 0.55) + lamp.get("amp", 0.6) * beam[..., None] * np.array([1.0, 0.9, 0.74],
+                                                                                                     np.float32)
+                if R < 0.2 * max(self.W, self.H):
+                    field = field * (1 - 0.72 * self._hand_shadow(c, R, k))[..., None]
                 gain = 16.0
                 # la sombra blanda del hilo (a un milímetro de la tela) se corre al revés de la luz; y solo se
                 # vuelve nítida y negra cerca de la lámpara (lejos, la tela difunde la luz y el hilo se pierde):
@@ -1207,7 +1241,8 @@ class Scene:
             lum = x[..., 0] * 0.3 + x[..., 1] * 0.55 + x[..., 2] * 0.15
             lum2 = lum / (1 + lum)                                    # Reinhard: conserva el vitral
             glow = x * (lum2 / np.maximum(lum, 1e-5))[..., None]
-            glow = glow + cv2.GaussianBlur(glow, (0, 0), 7 * u) * 0.2
+            if lamp != "empty":                        # (en el revés vacío, sin halo: la lana no es un neón)
+                glow = glow + cv2.GaussianBlur(glow, (0, 0), 7 * u) * 0.2
         return np.clip(img, 0, 1), glow, alpha, (F, B, lamp)
 
     # ------------------------------------------------------------------------------------------------

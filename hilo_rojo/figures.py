@@ -214,18 +214,20 @@ def house(cx, base, w, h, rng, t, wall="#c0392b", roof="#6e6a66", wall_kind="pla
     rise = h * (rng.uniform(0.45, 0.80) if vary else 0.62)
     ridge = w * (rng.uniform(0.0, 0.14) if vary else 0.08)
     if roof_style == "shed":                        # media agua: una sola caída, alta del lado de la puerta
+        ov *= 0.4                                   # (con alero corto)
         hr_ = rise * 0.62
         if door_side > 0:
             pts_ = [(x0 - ov, top + 4 * u), (x0 - ov, top - 4 * u), (x1 + ov, top - hr_), (x1 + ov, top - hr_ + 12 * u)]
         else:
             pts_ = [(x0 - ov, top - hr_ + 12 * u), (x0 - ov, top - hr_), (x1 + ov, top - 4 * u), (x1 + ov, top + 4 * u)]
         roof_poly = [np.array(p_) + jit() for p_ in pts_]
-        if door_side > 0:                           # la pared sube hasta el techo del lado alto
-            wall_up = [(x1, top), (x1, top - hr_ + 12 * u), (x0, top - 2 * u)]
+        # la pared sube hasta meterse bajo el techo (sin rendija por donde se vea lo de atrás)
+        if door_side > 0:
+            wall_up = [(x0, top + 2 * u), (x0, top - 3 * u), (x1, top - hr_ + 5 * u), (x1, top + 2 * u)]
         else:
-            wall_up = [(x0, top), (x0, top - hr_ + 12 * u), (x1, top - 2 * u)]
-        parts.append(Piece(_rot([np.array(p_) + jit() * 0.5 for p_ in wall_up], c0, ang), wall, rng, kind=wall_kind,
-                           t_place=t, stitch=None, fabric_scale=u, margin=6, rough=0.5))
+            wall_up = [(x0, top + 2 * u), (x0, top - hr_ + 5 * u), (x1, top - 3 * u), (x1, top + 2 * u)]
+        parts.append(Piece(_rot([np.array(p_) + jit() * 0.3 for p_ in wall_up], c0, ang), wall, rng, kind=wall_kind,
+                           t_place=t, stitch=None, fabric_scale=u, margin=6, rough=0.4))
     else:
         roof_poly = [np.array(p_) + jit() for p_ in [(x0 - ov, top + 4 * u), (cx - ridge, top - rise),
                                                      (cx + ridge, top - rise), (x1 + ov, top + 4 * u)]]

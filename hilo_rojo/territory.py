@@ -41,7 +41,7 @@ def stencil_mask(W, H, u, y0=0.30, mirror=False, cx=0.58):
     surf.flush()
     buf = np.ndarray((H, surf.get_stride()), np.uint8, buffer=surf.get_data())[:, :W].astype(np.float32) / 255
     # tinta de estarcido: bordes de plantilla (algo corrida), gastada
-    buf = cv2.dilate(buf, np.ones((3, 3), np.uint8), iterations=max(1, int(round(1.5 * u))))
+    buf = cv2.dilate(buf, np.ones((3, 3), np.uint8), iterations=max(1, int(round(2.2 * u))))
     rng = np.random.default_rng(9)
     wear = cv2.GaussianBlur(rng.random((H, W)).astype(np.float32), (0, 0), 2.0)
     m = buf * (0.45 + 0.55 * (wear > 0.47))
@@ -152,7 +152,7 @@ def build(W, H, seed=11):
     m = 40 * u   # margen hasta el borde de lana
     # --- cielo, sol y nubes -------------------------------------------------------------------------
     bake(Piece([(m, m), (W - m, m), (W - m, Y(Lz["sky"])), (m, Y(Lz["sky"]))], "#9fc4d8", rng, kind="plain",
-               stitch=None, fabric_scale=u, fray=0.6, crisp=0.35))           # (tocuyo delgado: se ve la trama)
+               stitch=None, fabric_scale=u, fray=0.6, crisp=0.22))           # (tocuyo delgado: se ve la trama)
     sx, sy = P(*Lz["sun"])
     disc, rays = sun(sx, sy, 60 * u, rng, 0, u=u)
     bake(disc)
